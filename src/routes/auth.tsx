@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,15 +42,17 @@ function AuthPage() {
 
   const handleGoogle = async () => {
     setLoading(true);
-    const res = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/dashboard",
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/` },
     });
-    if (res.error) {
-      toast.error(res.error.message);
+    if (error) {
+      toast.error(error.message);
       setLoading(false);
-      return;
     }
-    if (!res.redirected) navigate({ to: "/dashboard" });
+    // On success, Supabase redirects the browser to Google — no further
+    // action needed here. The root route ("/") redirects to /dashboard
+    // once the session is established.
   };
 
   return (

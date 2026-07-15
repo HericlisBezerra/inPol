@@ -1,7 +1,7 @@
-// Lovable AI Gateway helpers (server-only).
-// Uses the OpenAI-compatible /v1/chat/completions endpoint with LOVABLE_API_KEY.
+// Google Gemini helpers (server-only).
+// Uses the OpenAI-compatible /v1beta/openai/chat/completions endpoint with GEMINI_API_KEY.
 
-const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 export type AiMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -26,11 +26,11 @@ export class AiGatewayError extends Error {
 }
 
 export async function callAi(opts: AiCallOptions): Promise<AiResult> {
-  const apiKey = process.env.LOVABLE_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new AiGatewayError(500, "LOVABLE_API_KEY is not configured.");
+    throw new AiGatewayError(500, "GEMINI_API_KEY não está configurada.");
   }
-  const model = opts.model ?? "google/gemini-3-flash-preview";
+  const model = opts.model ?? "gemini-2.5-flash";
   const body: Record<string, unknown> = {
     model,
     messages: opts.messages,
@@ -39,12 +39,11 @@ export async function callAi(opts: AiCallOptions): Promise<AiResult> {
   if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
   if (opts.jsonObject) body.response_format = { type: "json_object" };
 
-  const res = await fetch(GATEWAY_URL, {
+  const res = await fetch(GEMINI_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Lovable-API-Key": apiKey,
-      "X-Lovable-AIG-SDK": "raw-fetch",
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
   });
@@ -52,11 +51,13 @@ export async function callAi(opts: AiCallOptions): Promise<AiResult> {
   const raw = await res.json().catch(() => ({}));
   if (!res.ok) {
     const message =
-      res.status === 402
-        ? "Créditos da Lovable AI esgotados. Adicione créditos no workspace."
-        : res.status === 429
-          ? "Limite de chamadas à IA atingido. Tente novamente em instantes."
-          : `Falha na chamada de IA (HTTP ${res.status}).`;
+      res.status === 429
+        ? "Limite de chamadas à IA atingido. Tente novamente em instantes."
+        : res.status === 401 || res.status === 403
+          ? "Chave da API do Gemini inválida ou sem permissão."
+          : res.status === 400
+            ? "Requisição inválida para a API do Gemini."
+            : `Falha na chamada de IA (HTTP ${res.status}).`;
     throw new AiGatewayError(res.status, message, raw);
   }
 

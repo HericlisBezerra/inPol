@@ -67,7 +67,7 @@ Responda com até 8 resultados em JSON estrito:
 Se não souber de fato, retorne {"results":[]}. Não invente URLs.`;
     try {
       const { text } = await callAi({
-        model: "google/gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         messages: [
           { role: "system", content: "Você é um buscador de imprensa. Use apenas conhecimento factual; nunca invente URLs ou notícias." },
           { role: "user", content: prompt },

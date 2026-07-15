@@ -13,7 +13,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { ThemeProvider, themeInitScript } from "@/lib/theme";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
   return (
@@ -38,10 +37,9 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    console.error(error);
   }, [error]);
 
   return (
@@ -89,8 +87,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Inpol — Inteligência Política" },
       { name: "twitter:description", content: "Plataforma de inteligência política em tempo real para gabinetes municipais." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c80ac70b-cb75-41df-818b-eb47c2a26782/id-preview-e7b49ac7--fab025bf-498e-4c1d-a0be-6a6ab1563132.lovable.app-1782153622054.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c80ac70b-cb75-41df-818b-eb47c2a26782/id-preview-e7b49ac7--fab025bf-498e-4c1d-a0be-6a6ab1563132.lovable.app-1782153622054.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

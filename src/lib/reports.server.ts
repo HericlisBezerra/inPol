@@ -1,5 +1,5 @@
 // Report generator (server-only). Aggregates analyses + alerts for the period
-// and asks Lovable AI to write the executive narrative.
+// and asks the AI to write the executive narrative.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { callAi } from "./ai-gateway.server";
@@ -197,7 +197,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
   const kindLabel = kind === "daily" ? "diário (últimas 24h)" : kind === "weekly" ? "semanal (últimos 7 dias)" : "mensal (últimos 30 dias)";
 
   const aiResp = await callAi({
-    model: "google/gemini-2.5-pro",
+    model: "gemini-2.5-pro",
     temperature: 0.45,
     maxTokens: 6000,
     messages: [

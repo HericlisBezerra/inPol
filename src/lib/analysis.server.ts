@@ -55,7 +55,7 @@ Regras:
 export async function analyzeBatch(
   vocab: VocabularyContext,
   messages: AnalysisInput[],
-  model = "google/gemini-3-flash-preview",
+  model = "gemini-2.5-flash",
 ): Promise<{ results: AnalysisOutput[]; model: string }> {
   if (messages.length === 0) return { results: [], model };
 
