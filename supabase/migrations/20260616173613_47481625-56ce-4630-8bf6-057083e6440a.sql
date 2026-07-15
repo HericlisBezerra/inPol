@@ -1,0 +1,2 @@
+ALTER TABLE public.elected_officials DROP CONSTRAINT IF EXISTS elected_officials_alignment_check;
+ALTER TABLE public.elected_officials ADD CONSTRAINT elected_officials_alignment_check CHECK (alignment IN ('ally','opponent','neutral','management'));

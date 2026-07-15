@@ -1,0 +1,189 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Inpol design system — "inteligência política".
+ * Dark by default (the deck is dark). Greens for signal, gold for accents,
+ * red/orange for alert levels. Fraunces (serif) headlines + JetBrains Mono
+ * for data/metadata + system sans for body.
+ *
+ * All colors in oklch. Never hardcode raw colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-panel: var(--panel);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-sans: -apple-system, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+}
+
+:root {
+  --radius: 0.5rem;
+
+  /* Light palette — paper with same green signal */
+  --background: oklch(0.985 0.003 150);
+  --foreground: oklch(0.22 0.012 165);
+  --surface: oklch(0.97 0.005 150);
+  --surface-2: oklch(0.945 0.006 150);
+  --panel: oklch(0.96 0.005 150);
+
+  --card: oklch(0.99 0.003 150);
+  --card-foreground: oklch(0.22 0.012 165);
+  --popover: oklch(0.99 0.003 150);
+  --popover-foreground: oklch(0.22 0.012 165);
+
+  --primary: oklch(0.58 0.14 165);
+  --primary-foreground: oklch(0.98 0.003 150);
+  --secondary: oklch(0.92 0.01 150);
+  --secondary-foreground: oklch(0.22 0.012 165);
+  --muted: oklch(0.94 0.008 150);
+  --muted-foreground: oklch(0.45 0.015 160);
+  --accent: oklch(0.65 0.13 75);
+  --accent-foreground: oklch(0.98 0.003 150);
+
+  --destructive: oklch(0.58 0.21 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --warning: oklch(0.68 0.16 65);
+  --warning-foreground: oklch(0.18 0.012 165);
+  --success: oklch(0.58 0.14 165);
+  --success-foreground: oklch(0.98 0.003 150);
+
+  --border: oklch(0.22 0.012 165 / 0.1);
+  --border-strong: oklch(0.22 0.012 165 / 0.18);
+  --input: oklch(0.22 0.012 165 / 0.1);
+  --ring: oklch(0.58 0.14 165 / 0.45);
+
+  --chart-1: oklch(0.58 0.14 165);
+  --chart-2: oklch(0.65 0.13 75);
+  --chart-3: oklch(0.68 0.16 65);
+  --chart-4: oklch(0.58 0.21 25);
+  --chart-5: oklch(0.55 0.13 220);
+}
+
+.dark {
+  /* Inpol dark palette — based on the deck */
+  --background: oklch(0.18 0.012 165);
+  --foreground: oklch(0.94 0.005 150);
+  --surface: oklch(0.21 0.014 165);
+  --surface-2: oklch(0.235 0.016 165);
+  --panel: oklch(0.225 0.016 165);
+
+  --card: oklch(0.21 0.014 165);
+  --card-foreground: oklch(0.94 0.005 150);
+  --popover: oklch(0.21 0.014 165);
+  --popover-foreground: oklch(0.94 0.005 150);
+
+  --primary: oklch(0.78 0.14 165);
+  --primary-foreground: oklch(0.18 0.012 165);
+  --secondary: oklch(0.28 0.018 165);
+  --secondary-foreground: oklch(0.94 0.005 150);
+  --muted: oklch(0.26 0.014 165);
+  --muted-foreground: oklch(0.66 0.02 160);
+  --accent: oklch(0.79 0.11 85);
+  --accent-foreground: oklch(0.18 0.012 165);
+
+  --destructive: oklch(0.65 0.21 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --warning: oklch(0.78 0.16 65);
+  --warning-foreground: oklch(0.18 0.012 165);
+  --success: oklch(0.78 0.14 165);
+  --success-foreground: oklch(0.18 0.012 165);
+
+  --border: oklch(0.94 0.005 150 / 0.08);
+  --border-strong: oklch(0.94 0.005 150 / 0.16);
+  --input: oklch(0.94 0.005 150 / 0.1);
+  --ring: oklch(0.78 0.14 165 / 0.5);
+
+  --chart-1: oklch(0.78 0.14 165);
+  --chart-2: oklch(0.79 0.11 85);
+  --chart-3: oklch(0.78 0.16 65);
+  --chart-4: oklch(0.65 0.21 25);
+  --chart-5: oklch(0.68 0.12 220);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html, body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-image:
+      radial-gradient(circle at 10% -10%, oklch(0.78 0.14 165 / 0.05), transparent 50%),
+      radial-gradient(circle at 90% 110%, oklch(0.79 0.11 85 / 0.04), transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  ::selection {
+    background-color: oklch(0.78 0.14 165 / 0.3);
+  }
+}
+
+.font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+.font-mono { font-family: var(--font-mono); }
+
+.label-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+@media print {
+  body { background: white !important; color: black !important; }
+  aside, nav, [data-sidebar], .print\:hidden { display: none !important; }
+  main, .max-w-5xl, .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
+  .bg-surface, .bg-surface-2, .bg-card { background: white !important; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+  .text-primary, .text-emerald-500, .text-destructive { color: black !important; }
+  .prose { color: black !important; }
+  a { color: black !important; text-decoration: none !important; }
+}

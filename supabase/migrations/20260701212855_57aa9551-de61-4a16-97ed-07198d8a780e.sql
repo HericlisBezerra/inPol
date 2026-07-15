@@ -1,0 +1,1 @@
+ALTER TYPE public.vocab_kind ADD VALUE IF NOT EXISTS 'focus_term';
