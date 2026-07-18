@@ -28,10 +28,7 @@ export const upsertInstagramTarget = createServerFn({ method: "POST" })
       created_by: userId,
     };
     if (data.id) {
-      const { error } = await supabase
-        .from("org_instagram_targets")
-        .update(row)
-        .eq("id", data.id);
+      const { error } = await supabase.from("org_instagram_targets").update(row).eq("id", data.id);
       if (error) throw new Error(error.message);
       return { id: data.id };
     }

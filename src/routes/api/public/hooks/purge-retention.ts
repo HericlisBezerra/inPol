@@ -22,4 +22,3 @@ export const Route = createFileRoute("/api/public/hooks/purge-retention")({
     },
   },
 });
-

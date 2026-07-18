@@ -9,9 +9,27 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SairRouteImport } from './routes/sair'
+import { Route as EntrarRouteImport } from './routes/entrar'
+import { Route as ComecarRouteImport } from './routes/comecar'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as V2RouteRouteImport } from './routes/v2/route'
+import { Route as SiteRouteRouteImport } from './routes/site/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as V2IndexRouteImport } from './routes/v2/index'
+import { Route as SiteIndexRouteImport } from './routes/site/index'
+import { Route as V2TerritorioRouteImport } from './routes/v2/territorio'
+import { Route as V2SinaisRouteImport } from './routes/v2/sinais'
+import { Route as V2RelatoriosRouteImport } from './routes/v2/relatorios'
+import { Route as V2RedeRouteImport } from './routes/v2/rede'
+import { Route as V2ModoEleicaoRouteImport } from './routes/v2/modo-eleicao'
+import { Route as V2CamaraRouteImport } from './routes/v2/camara'
+import { Route as V2AlertasRouteImport } from './routes/v2/alertas'
+import { Route as V2AdminRouteImport } from './routes/v2/admin'
+import { Route as SiteTermosRouteImport } from './routes/site/termos'
+import { Route as SitePrivacidadeRouteImport } from './routes/site/privacidade'
+import { Route as SiteLgpdRouteImport } from './routes/site/lgpd'
 import { Route as AuthenticatedTerritoryRouteImport } from './routes/_authenticated/territory'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -26,6 +44,21 @@ import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedAlertsRouteImport } from './routes/_authenticated/alerts'
 import { Route as AuthenticatedAdversariesRouteImport } from './routes/_authenticated/adversaries'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as V2AjustesRouteRouteImport } from './routes/v2/ajustes/route'
+import { Route as V2RelatoriosIndexRouteImport } from './routes/v2/relatorios.index'
+import { Route as V2CamaraIndexRouteImport } from './routes/v2/camara.index'
+import { Route as V2AlertasIndexRouteImport } from './routes/v2/alertas.index'
+import { Route as V2AjustesIndexRouteImport } from './routes/v2/ajustes/index'
+import { Route as V2RelatoriosReportIdRouteImport } from './routes/v2/relatorios.$reportId'
+import { Route as V2CamaraVereadorIdRouteImport } from './routes/v2/camara.$vereadorId'
+import { Route as V2AlertasAlertIdRouteImport } from './routes/v2/alertas.$alertId'
+import { Route as V2AjustesWhatsappRouteImport } from './routes/v2/ajustes/whatsapp'
+import { Route as V2AjustesOrganizacoesRouteImport } from './routes/v2/ajustes/organizacoes'
+import { Route as V2AjustesNotificacoesRouteImport } from './routes/v2/ajustes/notificacoes'
+import { Route as V2AjustesFontesRouteImport } from './routes/v2/ajustes/fontes'
+import { Route as V2AjustesEquipeRouteImport } from './routes/v2/ajustes/equipe'
+import { Route as V2AjustesEleitosRouteImport } from './routes/v2/ajustes/eleitos'
+import { Route as V2AjustesAuditoriaRouteImport } from './routes/v2/ajustes/auditoria'
 import { Route as AuthenticatedReportsReportIdRouteImport } from './routes/_authenticated/reports.$reportId'
 import { Route as AuthenticatedAlertsAlertIdRouteImport } from './routes/_authenticated/alerts.$alertId'
 import { Route as ApiPublicHooksScanNewsRouteImport } from './routes/api/public/hooks/scan-news'
@@ -37,9 +70,34 @@ import { Route as ApiPublicHooksBackfillWhatsappRouteImport } from './routes/api
 import { Route as ApiPublicHooksAnalyzePendingRouteImport } from './routes/api/public/hooks/analyze-pending'
 import { Route as ApiPublicEvolutionWebhookTokenRouteImport } from './routes/api/public/evolution.webhook.$token'
 
+const SairRoute = SairRouteImport.update({
+  id: '/sair',
+  path: '/sair',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EntrarRoute = EntrarRouteImport.update({
+  id: '/entrar',
+  path: '/entrar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComecarRoute = ComecarRouteImport.update({
+  id: '/comecar',
+  path: '/comecar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const V2RouteRoute = V2RouteRouteImport.update({
+  id: '/v2',
+  path: '/v2',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SiteRouteRoute = SiteRouteRouteImport.update({
+  id: '/site',
+  path: '/site',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -50,6 +108,71 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const V2IndexRoute = V2IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const SiteIndexRoute = SiteIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SiteRouteRoute,
+} as any)
+const V2TerritorioRoute = V2TerritorioRouteImport.update({
+  id: '/territorio',
+  path: '/territorio',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const V2SinaisRoute = V2SinaisRouteImport.update({
+  id: '/sinais',
+  path: '/sinais',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const V2RelatoriosRoute = V2RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const V2RedeRoute = V2RedeRouteImport.update({
+  id: '/rede',
+  path: '/rede',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const V2ModoEleicaoRoute = V2ModoEleicaoRouteImport.update({
+  id: '/modo-eleicao',
+  path: '/modo-eleicao',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const V2CamaraRoute = V2CamaraRouteImport.update({
+  id: '/camara',
+  path: '/camara',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const V2AlertasRoute = V2AlertasRouteImport.update({
+  id: '/alertas',
+  path: '/alertas',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const V2AdminRoute = V2AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const SiteTermosRoute = SiteTermosRouteImport.update({
+  id: '/termos',
+  path: '/termos',
+  getParentRoute: () => SiteRouteRoute,
+} as any)
+const SitePrivacidadeRoute = SitePrivacidadeRouteImport.update({
+  id: '/privacidade',
+  path: '/privacidade',
+  getParentRoute: () => SiteRouteRoute,
+} as any)
+const SiteLgpdRoute = SiteLgpdRouteImport.update({
+  id: '/lgpd',
+  path: '/lgpd',
+  getParentRoute: () => SiteRouteRoute,
 } as any)
 const AuthenticatedTerritoryRoute = AuthenticatedTerritoryRouteImport.update({
   id: '/territory',
@@ -122,6 +245,81 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const V2AjustesRouteRoute = V2AjustesRouteRouteImport.update({
+  id: '/ajustes',
+  path: '/ajustes',
+  getParentRoute: () => V2RouteRoute,
+} as any)
+const V2RelatoriosIndexRoute = V2RelatoriosIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => V2RelatoriosRoute,
+} as any)
+const V2CamaraIndexRoute = V2CamaraIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => V2CamaraRoute,
+} as any)
+const V2AlertasIndexRoute = V2AlertasIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => V2AlertasRoute,
+} as any)
+const V2AjustesIndexRoute = V2AjustesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => V2AjustesRouteRoute,
+} as any)
+const V2RelatoriosReportIdRoute = V2RelatoriosReportIdRouteImport.update({
+  id: '/$reportId',
+  path: '/$reportId',
+  getParentRoute: () => V2RelatoriosRoute,
+} as any)
+const V2CamaraVereadorIdRoute = V2CamaraVereadorIdRouteImport.update({
+  id: '/$vereadorId',
+  path: '/$vereadorId',
+  getParentRoute: () => V2CamaraRoute,
+} as any)
+const V2AlertasAlertIdRoute = V2AlertasAlertIdRouteImport.update({
+  id: '/$alertId',
+  path: '/$alertId',
+  getParentRoute: () => V2AlertasRoute,
+} as any)
+const V2AjustesWhatsappRoute = V2AjustesWhatsappRouteImport.update({
+  id: '/whatsapp',
+  path: '/whatsapp',
+  getParentRoute: () => V2AjustesRouteRoute,
+} as any)
+const V2AjustesOrganizacoesRoute = V2AjustesOrganizacoesRouteImport.update({
+  id: '/organizacoes',
+  path: '/organizacoes',
+  getParentRoute: () => V2AjustesRouteRoute,
+} as any)
+const V2AjustesNotificacoesRoute = V2AjustesNotificacoesRouteImport.update({
+  id: '/notificacoes',
+  path: '/notificacoes',
+  getParentRoute: () => V2AjustesRouteRoute,
+} as any)
+const V2AjustesFontesRoute = V2AjustesFontesRouteImport.update({
+  id: '/fontes',
+  path: '/fontes',
+  getParentRoute: () => V2AjustesRouteRoute,
+} as any)
+const V2AjustesEquipeRoute = V2AjustesEquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
+  getParentRoute: () => V2AjustesRouteRoute,
+} as any)
+const V2AjustesEleitosRoute = V2AjustesEleitosRouteImport.update({
+  id: '/eleitos',
+  path: '/eleitos',
+  getParentRoute: () => V2AjustesRouteRoute,
+} as any)
+const V2AjustesAuditoriaRoute = V2AjustesAuditoriaRouteImport.update({
+  id: '/auditoria',
+  path: '/auditoria',
+  getParentRoute: () => V2AjustesRouteRoute,
+} as any)
 const AuthenticatedReportsReportIdRoute =
   AuthenticatedReportsReportIdRouteImport.update({
     id: '/$reportId',
@@ -184,7 +382,13 @@ const ApiPublicEvolutionWebhookTokenRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/site': typeof SiteRouteRouteWithChildren
+  '/v2': typeof V2RouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/comecar': typeof ComecarRoute
+  '/entrar': typeof EntrarRoute
+  '/sair': typeof SairRoute
+  '/v2/ajustes': typeof V2AjustesRouteRouteWithChildren
   '/admin': typeof AuthenticatedAdminRoute
   '/adversaries': typeof AuthenticatedAdversariesRoute
   '/alerts': typeof AuthenticatedAlertsRouteWithChildren
@@ -199,8 +403,35 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/territory': typeof AuthenticatedTerritoryRoute
+  '/site/lgpd': typeof SiteLgpdRoute
+  '/site/privacidade': typeof SitePrivacidadeRoute
+  '/site/termos': typeof SiteTermosRoute
+  '/v2/admin': typeof V2AdminRoute
+  '/v2/alertas': typeof V2AlertasRouteWithChildren
+  '/v2/camara': typeof V2CamaraRouteWithChildren
+  '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
+  '/v2/rede': typeof V2RedeRoute
+  '/v2/relatorios': typeof V2RelatoriosRouteWithChildren
+  '/v2/sinais': typeof V2SinaisRoute
+  '/v2/territorio': typeof V2TerritorioRoute
+  '/site/': typeof SiteIndexRoute
+  '/v2/': typeof V2IndexRoute
   '/alerts/$alertId': typeof AuthenticatedAlertsAlertIdRoute
   '/reports/$reportId': typeof AuthenticatedReportsReportIdRoute
+  '/v2/ajustes/auditoria': typeof V2AjustesAuditoriaRoute
+  '/v2/ajustes/eleitos': typeof V2AjustesEleitosRoute
+  '/v2/ajustes/equipe': typeof V2AjustesEquipeRoute
+  '/v2/ajustes/fontes': typeof V2AjustesFontesRoute
+  '/v2/ajustes/notificacoes': typeof V2AjustesNotificacoesRoute
+  '/v2/ajustes/organizacoes': typeof V2AjustesOrganizacoesRoute
+  '/v2/ajustes/whatsapp': typeof V2AjustesWhatsappRoute
+  '/v2/alertas/$alertId': typeof V2AlertasAlertIdRoute
+  '/v2/camara/$vereadorId': typeof V2CamaraVereadorIdRoute
+  '/v2/relatorios/$reportId': typeof V2RelatoriosReportIdRoute
+  '/v2/ajustes/': typeof V2AjustesIndexRoute
+  '/v2/alertas/': typeof V2AlertasIndexRoute
+  '/v2/camara/': typeof V2CamaraIndexRoute
+  '/v2/relatorios/': typeof V2RelatoriosIndexRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -213,6 +444,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/comecar': typeof ComecarRoute
+  '/entrar': typeof EntrarRoute
+  '/sair': typeof SairRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/adversaries': typeof AuthenticatedAdversariesRoute
   '/alerts': typeof AuthenticatedAlertsRouteWithChildren
@@ -227,8 +461,32 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/territory': typeof AuthenticatedTerritoryRoute
+  '/site/lgpd': typeof SiteLgpdRoute
+  '/site/privacidade': typeof SitePrivacidadeRoute
+  '/site/termos': typeof SiteTermosRoute
+  '/v2/admin': typeof V2AdminRoute
+  '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
+  '/v2/rede': typeof V2RedeRoute
+  '/v2/sinais': typeof V2SinaisRoute
+  '/v2/territorio': typeof V2TerritorioRoute
+  '/site': typeof SiteIndexRoute
+  '/v2': typeof V2IndexRoute
   '/alerts/$alertId': typeof AuthenticatedAlertsAlertIdRoute
   '/reports/$reportId': typeof AuthenticatedReportsReportIdRoute
+  '/v2/ajustes/auditoria': typeof V2AjustesAuditoriaRoute
+  '/v2/ajustes/eleitos': typeof V2AjustesEleitosRoute
+  '/v2/ajustes/equipe': typeof V2AjustesEquipeRoute
+  '/v2/ajustes/fontes': typeof V2AjustesFontesRoute
+  '/v2/ajustes/notificacoes': typeof V2AjustesNotificacoesRoute
+  '/v2/ajustes/organizacoes': typeof V2AjustesOrganizacoesRoute
+  '/v2/ajustes/whatsapp': typeof V2AjustesWhatsappRoute
+  '/v2/alertas/$alertId': typeof V2AlertasAlertIdRoute
+  '/v2/camara/$vereadorId': typeof V2CamaraVereadorIdRoute
+  '/v2/relatorios/$reportId': typeof V2RelatoriosReportIdRoute
+  '/v2/ajustes': typeof V2AjustesIndexRoute
+  '/v2/alertas': typeof V2AlertasIndexRoute
+  '/v2/camara': typeof V2CamaraIndexRoute
+  '/v2/relatorios': typeof V2RelatoriosIndexRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -242,7 +500,13 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/site': typeof SiteRouteRouteWithChildren
+  '/v2': typeof V2RouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/comecar': typeof ComecarRoute
+  '/entrar': typeof EntrarRoute
+  '/sair': typeof SairRoute
+  '/v2/ajustes': typeof V2AjustesRouteRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/adversaries': typeof AuthenticatedAdversariesRoute
   '/_authenticated/alerts': typeof AuthenticatedAlertsRouteWithChildren
@@ -257,8 +521,35 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/_authenticated/territory': typeof AuthenticatedTerritoryRoute
+  '/site/lgpd': typeof SiteLgpdRoute
+  '/site/privacidade': typeof SitePrivacidadeRoute
+  '/site/termos': typeof SiteTermosRoute
+  '/v2/admin': typeof V2AdminRoute
+  '/v2/alertas': typeof V2AlertasRouteWithChildren
+  '/v2/camara': typeof V2CamaraRouteWithChildren
+  '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
+  '/v2/rede': typeof V2RedeRoute
+  '/v2/relatorios': typeof V2RelatoriosRouteWithChildren
+  '/v2/sinais': typeof V2SinaisRoute
+  '/v2/territorio': typeof V2TerritorioRoute
+  '/site/': typeof SiteIndexRoute
+  '/v2/': typeof V2IndexRoute
   '/_authenticated/alerts/$alertId': typeof AuthenticatedAlertsAlertIdRoute
   '/_authenticated/reports/$reportId': typeof AuthenticatedReportsReportIdRoute
+  '/v2/ajustes/auditoria': typeof V2AjustesAuditoriaRoute
+  '/v2/ajustes/eleitos': typeof V2AjustesEleitosRoute
+  '/v2/ajustes/equipe': typeof V2AjustesEquipeRoute
+  '/v2/ajustes/fontes': typeof V2AjustesFontesRoute
+  '/v2/ajustes/notificacoes': typeof V2AjustesNotificacoesRoute
+  '/v2/ajustes/organizacoes': typeof V2AjustesOrganizacoesRoute
+  '/v2/ajustes/whatsapp': typeof V2AjustesWhatsappRoute
+  '/v2/alertas/$alertId': typeof V2AlertasAlertIdRoute
+  '/v2/camara/$vereadorId': typeof V2CamaraVereadorIdRoute
+  '/v2/relatorios/$reportId': typeof V2RelatoriosReportIdRoute
+  '/v2/ajustes/': typeof V2AjustesIndexRoute
+  '/v2/alertas/': typeof V2AlertasIndexRoute
+  '/v2/camara/': typeof V2CamaraIndexRoute
+  '/v2/relatorios/': typeof V2RelatoriosIndexRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -272,7 +563,13 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/site'
+    | '/v2'
     | '/auth'
+    | '/comecar'
+    | '/entrar'
+    | '/sair'
+    | '/v2/ajustes'
     | '/admin'
     | '/adversaries'
     | '/alerts'
@@ -287,8 +584,35 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sources'
     | '/territory'
+    | '/site/lgpd'
+    | '/site/privacidade'
+    | '/site/termos'
+    | '/v2/admin'
+    | '/v2/alertas'
+    | '/v2/camara'
+    | '/v2/modo-eleicao'
+    | '/v2/rede'
+    | '/v2/relatorios'
+    | '/v2/sinais'
+    | '/v2/territorio'
+    | '/site/'
+    | '/v2/'
     | '/alerts/$alertId'
     | '/reports/$reportId'
+    | '/v2/ajustes/auditoria'
+    | '/v2/ajustes/eleitos'
+    | '/v2/ajustes/equipe'
+    | '/v2/ajustes/fontes'
+    | '/v2/ajustes/notificacoes'
+    | '/v2/ajustes/organizacoes'
+    | '/v2/ajustes/whatsapp'
+    | '/v2/alertas/$alertId'
+    | '/v2/camara/$vereadorId'
+    | '/v2/relatorios/$reportId'
+    | '/v2/ajustes/'
+    | '/v2/alertas/'
+    | '/v2/camara/'
+    | '/v2/relatorios/'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -301,6 +625,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/comecar'
+    | '/entrar'
+    | '/sair'
     | '/admin'
     | '/adversaries'
     | '/alerts'
@@ -315,8 +642,32 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sources'
     | '/territory'
+    | '/site/lgpd'
+    | '/site/privacidade'
+    | '/site/termos'
+    | '/v2/admin'
+    | '/v2/modo-eleicao'
+    | '/v2/rede'
+    | '/v2/sinais'
+    | '/v2/territorio'
+    | '/site'
+    | '/v2'
     | '/alerts/$alertId'
     | '/reports/$reportId'
+    | '/v2/ajustes/auditoria'
+    | '/v2/ajustes/eleitos'
+    | '/v2/ajustes/equipe'
+    | '/v2/ajustes/fontes'
+    | '/v2/ajustes/notificacoes'
+    | '/v2/ajustes/organizacoes'
+    | '/v2/ajustes/whatsapp'
+    | '/v2/alertas/$alertId'
+    | '/v2/camara/$vereadorId'
+    | '/v2/relatorios/$reportId'
+    | '/v2/ajustes'
+    | '/v2/alertas'
+    | '/v2/camara'
+    | '/v2/relatorios'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -329,7 +680,13 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/site'
+    | '/v2'
     | '/auth'
+    | '/comecar'
+    | '/entrar'
+    | '/sair'
+    | '/v2/ajustes'
     | '/_authenticated/admin'
     | '/_authenticated/adversaries'
     | '/_authenticated/alerts'
@@ -344,8 +701,35 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/sources'
     | '/_authenticated/territory'
+    | '/site/lgpd'
+    | '/site/privacidade'
+    | '/site/termos'
+    | '/v2/admin'
+    | '/v2/alertas'
+    | '/v2/camara'
+    | '/v2/modo-eleicao'
+    | '/v2/rede'
+    | '/v2/relatorios'
+    | '/v2/sinais'
+    | '/v2/territorio'
+    | '/site/'
+    | '/v2/'
     | '/_authenticated/alerts/$alertId'
     | '/_authenticated/reports/$reportId'
+    | '/v2/ajustes/auditoria'
+    | '/v2/ajustes/eleitos'
+    | '/v2/ajustes/equipe'
+    | '/v2/ajustes/fontes'
+    | '/v2/ajustes/notificacoes'
+    | '/v2/ajustes/organizacoes'
+    | '/v2/ajustes/whatsapp'
+    | '/v2/alertas/$alertId'
+    | '/v2/camara/$vereadorId'
+    | '/v2/relatorios/$reportId'
+    | '/v2/ajustes/'
+    | '/v2/alertas/'
+    | '/v2/camara/'
+    | '/v2/relatorios/'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -359,7 +743,12 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  SiteRouteRoute: typeof SiteRouteRouteWithChildren
+  V2RouteRoute: typeof V2RouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ComecarRoute: typeof ComecarRoute
+  EntrarRoute: typeof EntrarRoute
+  SairRoute: typeof SairRoute
   ApiPublicHooksAnalyzePendingRoute: typeof ApiPublicHooksAnalyzePendingRoute
   ApiPublicHooksBackfillWhatsappRoute: typeof ApiPublicHooksBackfillWhatsappRoute
   ApiPublicHooksDetectAlertsRoute: typeof ApiPublicHooksDetectAlertsRoute
@@ -372,11 +761,46 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sair': {
+      id: '/sair'
+      path: '/sair'
+      fullPath: '/sair'
+      preLoaderRoute: typeof SairRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/entrar': {
+      id: '/entrar'
+      path: '/entrar'
+      fullPath: '/entrar'
+      preLoaderRoute: typeof EntrarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/comecar': {
+      id: '/comecar'
+      path: '/comecar'
+      fullPath: '/comecar'
+      preLoaderRoute: typeof ComecarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/v2': {
+      id: '/v2'
+      path: '/v2'
+      fullPath: '/v2'
+      preLoaderRoute: typeof V2RouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/site': {
+      id: '/site'
+      path: '/site'
+      fullPath: '/site'
+      preLoaderRoute: typeof SiteRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -392,6 +816,97 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/v2/': {
+      id: '/v2/'
+      path: '/'
+      fullPath: '/v2/'
+      preLoaderRoute: typeof V2IndexRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/site/': {
+      id: '/site/'
+      path: '/'
+      fullPath: '/site/'
+      preLoaderRoute: typeof SiteIndexRouteImport
+      parentRoute: typeof SiteRouteRoute
+    }
+    '/v2/territorio': {
+      id: '/v2/territorio'
+      path: '/territorio'
+      fullPath: '/v2/territorio'
+      preLoaderRoute: typeof V2TerritorioRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/v2/sinais': {
+      id: '/v2/sinais'
+      path: '/sinais'
+      fullPath: '/v2/sinais'
+      preLoaderRoute: typeof V2SinaisRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/v2/relatorios': {
+      id: '/v2/relatorios'
+      path: '/relatorios'
+      fullPath: '/v2/relatorios'
+      preLoaderRoute: typeof V2RelatoriosRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/v2/rede': {
+      id: '/v2/rede'
+      path: '/rede'
+      fullPath: '/v2/rede'
+      preLoaderRoute: typeof V2RedeRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/v2/modo-eleicao': {
+      id: '/v2/modo-eleicao'
+      path: '/modo-eleicao'
+      fullPath: '/v2/modo-eleicao'
+      preLoaderRoute: typeof V2ModoEleicaoRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/v2/camara': {
+      id: '/v2/camara'
+      path: '/camara'
+      fullPath: '/v2/camara'
+      preLoaderRoute: typeof V2CamaraRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/v2/alertas': {
+      id: '/v2/alertas'
+      path: '/alertas'
+      fullPath: '/v2/alertas'
+      preLoaderRoute: typeof V2AlertasRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/v2/admin': {
+      id: '/v2/admin'
+      path: '/admin'
+      fullPath: '/v2/admin'
+      preLoaderRoute: typeof V2AdminRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/site/termos': {
+      id: '/site/termos'
+      path: '/termos'
+      fullPath: '/site/termos'
+      preLoaderRoute: typeof SiteTermosRouteImport
+      parentRoute: typeof SiteRouteRoute
+    }
+    '/site/privacidade': {
+      id: '/site/privacidade'
+      path: '/privacidade'
+      fullPath: '/site/privacidade'
+      preLoaderRoute: typeof SitePrivacidadeRouteImport
+      parentRoute: typeof SiteRouteRoute
+    }
+    '/site/lgpd': {
+      id: '/site/lgpd'
+      path: '/lgpd'
+      fullPath: '/site/lgpd'
+      preLoaderRoute: typeof SiteLgpdRouteImport
+      parentRoute: typeof SiteRouteRoute
     }
     '/_authenticated/territory': {
       id: '/_authenticated/territory'
@@ -490,6 +1005,111 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin'
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/v2/ajustes': {
+      id: '/v2/ajustes'
+      path: '/ajustes'
+      fullPath: '/v2/ajustes'
+      preLoaderRoute: typeof V2AjustesRouteRouteImport
+      parentRoute: typeof V2RouteRoute
+    }
+    '/v2/relatorios/': {
+      id: '/v2/relatorios/'
+      path: '/'
+      fullPath: '/v2/relatorios/'
+      preLoaderRoute: typeof V2RelatoriosIndexRouteImport
+      parentRoute: typeof V2RelatoriosRoute
+    }
+    '/v2/camara/': {
+      id: '/v2/camara/'
+      path: '/'
+      fullPath: '/v2/camara/'
+      preLoaderRoute: typeof V2CamaraIndexRouteImport
+      parentRoute: typeof V2CamaraRoute
+    }
+    '/v2/alertas/': {
+      id: '/v2/alertas/'
+      path: '/'
+      fullPath: '/v2/alertas/'
+      preLoaderRoute: typeof V2AlertasIndexRouteImport
+      parentRoute: typeof V2AlertasRoute
+    }
+    '/v2/ajustes/': {
+      id: '/v2/ajustes/'
+      path: '/'
+      fullPath: '/v2/ajustes/'
+      preLoaderRoute: typeof V2AjustesIndexRouteImport
+      parentRoute: typeof V2AjustesRouteRoute
+    }
+    '/v2/relatorios/$reportId': {
+      id: '/v2/relatorios/$reportId'
+      path: '/$reportId'
+      fullPath: '/v2/relatorios/$reportId'
+      preLoaderRoute: typeof V2RelatoriosReportIdRouteImport
+      parentRoute: typeof V2RelatoriosRoute
+    }
+    '/v2/camara/$vereadorId': {
+      id: '/v2/camara/$vereadorId'
+      path: '/$vereadorId'
+      fullPath: '/v2/camara/$vereadorId'
+      preLoaderRoute: typeof V2CamaraVereadorIdRouteImport
+      parentRoute: typeof V2CamaraRoute
+    }
+    '/v2/alertas/$alertId': {
+      id: '/v2/alertas/$alertId'
+      path: '/$alertId'
+      fullPath: '/v2/alertas/$alertId'
+      preLoaderRoute: typeof V2AlertasAlertIdRouteImport
+      parentRoute: typeof V2AlertasRoute
+    }
+    '/v2/ajustes/whatsapp': {
+      id: '/v2/ajustes/whatsapp'
+      path: '/whatsapp'
+      fullPath: '/v2/ajustes/whatsapp'
+      preLoaderRoute: typeof V2AjustesWhatsappRouteImport
+      parentRoute: typeof V2AjustesRouteRoute
+    }
+    '/v2/ajustes/organizacoes': {
+      id: '/v2/ajustes/organizacoes'
+      path: '/organizacoes'
+      fullPath: '/v2/ajustes/organizacoes'
+      preLoaderRoute: typeof V2AjustesOrganizacoesRouteImport
+      parentRoute: typeof V2AjustesRouteRoute
+    }
+    '/v2/ajustes/notificacoes': {
+      id: '/v2/ajustes/notificacoes'
+      path: '/notificacoes'
+      fullPath: '/v2/ajustes/notificacoes'
+      preLoaderRoute: typeof V2AjustesNotificacoesRouteImport
+      parentRoute: typeof V2AjustesRouteRoute
+    }
+    '/v2/ajustes/fontes': {
+      id: '/v2/ajustes/fontes'
+      path: '/fontes'
+      fullPath: '/v2/ajustes/fontes'
+      preLoaderRoute: typeof V2AjustesFontesRouteImport
+      parentRoute: typeof V2AjustesRouteRoute
+    }
+    '/v2/ajustes/equipe': {
+      id: '/v2/ajustes/equipe'
+      path: '/equipe'
+      fullPath: '/v2/ajustes/equipe'
+      preLoaderRoute: typeof V2AjustesEquipeRouteImport
+      parentRoute: typeof V2AjustesRouteRoute
+    }
+    '/v2/ajustes/eleitos': {
+      id: '/v2/ajustes/eleitos'
+      path: '/eleitos'
+      fullPath: '/v2/ajustes/eleitos'
+      preLoaderRoute: typeof V2AjustesEleitosRouteImport
+      parentRoute: typeof V2AjustesRouteRoute
+    }
+    '/v2/ajustes/auditoria': {
+      id: '/v2/ajustes/auditoria'
+      path: '/auditoria'
+      fullPath: '/v2/ajustes/auditoria'
+      preLoaderRoute: typeof V2AjustesAuditoriaRouteImport
+      parentRoute: typeof V2AjustesRouteRoute
     }
     '/_authenticated/reports/$reportId': {
       id: '/_authenticated/reports/$reportId'
@@ -623,10 +1243,130 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface SiteRouteRouteChildren {
+  SiteLgpdRoute: typeof SiteLgpdRoute
+  SitePrivacidadeRoute: typeof SitePrivacidadeRoute
+  SiteTermosRoute: typeof SiteTermosRoute
+  SiteIndexRoute: typeof SiteIndexRoute
+}
+
+const SiteRouteRouteChildren: SiteRouteRouteChildren = {
+  SiteLgpdRoute: SiteLgpdRoute,
+  SitePrivacidadeRoute: SitePrivacidadeRoute,
+  SiteTermosRoute: SiteTermosRoute,
+  SiteIndexRoute: SiteIndexRoute,
+}
+
+const SiteRouteRouteWithChildren = SiteRouteRoute._addFileChildren(
+  SiteRouteRouteChildren,
+)
+
+interface V2AjustesRouteRouteChildren {
+  V2AjustesAuditoriaRoute: typeof V2AjustesAuditoriaRoute
+  V2AjustesEleitosRoute: typeof V2AjustesEleitosRoute
+  V2AjustesEquipeRoute: typeof V2AjustesEquipeRoute
+  V2AjustesFontesRoute: typeof V2AjustesFontesRoute
+  V2AjustesNotificacoesRoute: typeof V2AjustesNotificacoesRoute
+  V2AjustesOrganizacoesRoute: typeof V2AjustesOrganizacoesRoute
+  V2AjustesWhatsappRoute: typeof V2AjustesWhatsappRoute
+  V2AjustesIndexRoute: typeof V2AjustesIndexRoute
+}
+
+const V2AjustesRouteRouteChildren: V2AjustesRouteRouteChildren = {
+  V2AjustesAuditoriaRoute: V2AjustesAuditoriaRoute,
+  V2AjustesEleitosRoute: V2AjustesEleitosRoute,
+  V2AjustesEquipeRoute: V2AjustesEquipeRoute,
+  V2AjustesFontesRoute: V2AjustesFontesRoute,
+  V2AjustesNotificacoesRoute: V2AjustesNotificacoesRoute,
+  V2AjustesOrganizacoesRoute: V2AjustesOrganizacoesRoute,
+  V2AjustesWhatsappRoute: V2AjustesWhatsappRoute,
+  V2AjustesIndexRoute: V2AjustesIndexRoute,
+}
+
+const V2AjustesRouteRouteWithChildren = V2AjustesRouteRoute._addFileChildren(
+  V2AjustesRouteRouteChildren,
+)
+
+interface V2AlertasRouteChildren {
+  V2AlertasAlertIdRoute: typeof V2AlertasAlertIdRoute
+  V2AlertasIndexRoute: typeof V2AlertasIndexRoute
+}
+
+const V2AlertasRouteChildren: V2AlertasRouteChildren = {
+  V2AlertasAlertIdRoute: V2AlertasAlertIdRoute,
+  V2AlertasIndexRoute: V2AlertasIndexRoute,
+}
+
+const V2AlertasRouteWithChildren = V2AlertasRoute._addFileChildren(
+  V2AlertasRouteChildren,
+)
+
+interface V2CamaraRouteChildren {
+  V2CamaraVereadorIdRoute: typeof V2CamaraVereadorIdRoute
+  V2CamaraIndexRoute: typeof V2CamaraIndexRoute
+}
+
+const V2CamaraRouteChildren: V2CamaraRouteChildren = {
+  V2CamaraVereadorIdRoute: V2CamaraVereadorIdRoute,
+  V2CamaraIndexRoute: V2CamaraIndexRoute,
+}
+
+const V2CamaraRouteWithChildren = V2CamaraRoute._addFileChildren(
+  V2CamaraRouteChildren,
+)
+
+interface V2RelatoriosRouteChildren {
+  V2RelatoriosReportIdRoute: typeof V2RelatoriosReportIdRoute
+  V2RelatoriosIndexRoute: typeof V2RelatoriosIndexRoute
+}
+
+const V2RelatoriosRouteChildren: V2RelatoriosRouteChildren = {
+  V2RelatoriosReportIdRoute: V2RelatoriosReportIdRoute,
+  V2RelatoriosIndexRoute: V2RelatoriosIndexRoute,
+}
+
+const V2RelatoriosRouteWithChildren = V2RelatoriosRoute._addFileChildren(
+  V2RelatoriosRouteChildren,
+)
+
+interface V2RouteRouteChildren {
+  V2AjustesRouteRoute: typeof V2AjustesRouteRouteWithChildren
+  V2AdminRoute: typeof V2AdminRoute
+  V2AlertasRoute: typeof V2AlertasRouteWithChildren
+  V2CamaraRoute: typeof V2CamaraRouteWithChildren
+  V2ModoEleicaoRoute: typeof V2ModoEleicaoRoute
+  V2RedeRoute: typeof V2RedeRoute
+  V2RelatoriosRoute: typeof V2RelatoriosRouteWithChildren
+  V2SinaisRoute: typeof V2SinaisRoute
+  V2TerritorioRoute: typeof V2TerritorioRoute
+  V2IndexRoute: typeof V2IndexRoute
+}
+
+const V2RouteRouteChildren: V2RouteRouteChildren = {
+  V2AjustesRouteRoute: V2AjustesRouteRouteWithChildren,
+  V2AdminRoute: V2AdminRoute,
+  V2AlertasRoute: V2AlertasRouteWithChildren,
+  V2CamaraRoute: V2CamaraRouteWithChildren,
+  V2ModoEleicaoRoute: V2ModoEleicaoRoute,
+  V2RedeRoute: V2RedeRoute,
+  V2RelatoriosRoute: V2RelatoriosRouteWithChildren,
+  V2SinaisRoute: V2SinaisRoute,
+  V2TerritorioRoute: V2TerritorioRoute,
+  V2IndexRoute: V2IndexRoute,
+}
+
+const V2RouteRouteWithChildren =
+  V2RouteRoute._addFileChildren(V2RouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  SiteRouteRoute: SiteRouteRouteWithChildren,
+  V2RouteRoute: V2RouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ComecarRoute: ComecarRoute,
+  EntrarRoute: EntrarRoute,
+  SairRoute: SairRoute,
   ApiPublicHooksAnalyzePendingRoute: ApiPublicHooksAnalyzePendingRoute,
   ApiPublicHooksBackfillWhatsappRoute: ApiPublicHooksBackfillWhatsappRoute,
   ApiPublicHooksDetectAlertsRoute: ApiPublicHooksDetectAlertsRoute,

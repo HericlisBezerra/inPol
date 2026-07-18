@@ -125,12 +125,10 @@ export const importElected = createServerFn({ method: "POST" })
     }
     const unique = [...dedup.values()];
 
-    const { error } = await context.supabase
-      .from("elected_officials")
-      .upsert(unique, {
-        onConflict: "org_id,ano_eleicao,cod_municipio_tse,cargo_codigo,numero",
-        ignoreDuplicates: false,
-      });
+    const { error } = await context.supabase.from("elected_officials").upsert(unique, {
+      onConflict: "org_id,ano_eleicao,cod_municipio_tse,cargo_codigo,numero",
+      ignoreDuplicates: false,
+    });
     if (error) throw new Error(error.message);
 
     return { imported: unique.length, elected: unique.filter((r) => r.is_elected).length };
@@ -204,23 +202,21 @@ async function syncElectedToVocabulary(
     ),
   );
 
-  await supabase
-    .from("org_vocabulary")
-    .upsert(
-      {
-        org_id: orgId,
-        kind,
-        value,
-        aliases,
-        metadata: {
-          elected_id: electedId,
-          source: "elected",
-          cargo: person.cargo_nome ?? null,
-          partido: person.partido_sigla ?? null,
-        },
+  await supabase.from("org_vocabulary").upsert(
+    {
+      org_id: orgId,
+      kind,
+      value,
+      aliases,
+      metadata: {
+        elected_id: electedId,
+        source: "elected",
+        cargo: person.cargo_nome ?? null,
+        partido: person.partido_sigla ?? null,
       },
-      { onConflict: "org_id,kind,value" },
-    );
+    },
+    { onConflict: "org_id,kind,value" },
+  );
 }
 
 export const setElectedAlignment = createServerFn({ method: "POST" })

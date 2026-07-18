@@ -53,8 +53,7 @@ export const Route = createFileRoute("/_authenticated/groups")({
 
 function GroupsPage() {
   const { orgId } = useCurrentOrg();
-  if (!orgId)
-    return <div className="p-8 text-muted-foreground">Selecione uma organização.</div>;
+  if (!orgId) return <div className="p-8 text-muted-foreground">Selecione uma organização.</div>;
   return (
     <div className="p-8 max-w-6xl space-y-6">
       <header>

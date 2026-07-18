@@ -7,8 +7,7 @@ export function InpolLogo({
   className?: string;
   size?: "sm" | "md" | "lg";
 }) {
-  const sizeClass =
-    size === "sm" ? "text-2xl" : size === "lg" ? "text-5xl" : "text-3xl";
+  const sizeClass = size === "sm" ? "text-2xl" : size === "lg" ? "text-5xl" : "text-3xl";
   return (
     <span
       className={cn(

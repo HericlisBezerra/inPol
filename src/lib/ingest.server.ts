@@ -19,14 +19,31 @@ export interface EvolutionMessagePayload {
   pushName?: string;
 }
 
-function extractContent(payload: EvolutionMessagePayload): { content: string | null; mediaKind: string | null; mime: string | null } {
+function extractContent(payload: EvolutionMessagePayload): {
+  content: string | null;
+  mediaKind: string | null;
+  mime: string | null;
+} {
   const m = payload.message;
   if (!m) return { content: null, mediaKind: null, mime: null };
-  if (typeof m.conversation === "string" && m.conversation.trim()) return { content: m.conversation, mediaKind: "text", mime: null };
-  if (m.extendedTextMessage?.text) return { content: m.extendedTextMessage.text, mediaKind: "text", mime: null };
-  if (m.imageMessage) return { content: m.imageMessage.caption ?? null, mediaKind: "image", mime: m.imageMessage.mimetype ?? null };
-  if (m.videoMessage) return { content: m.videoMessage.caption ?? null, mediaKind: "video", mime: m.videoMessage.mimetype ?? null };
-  if (m.audioMessage) return { content: null, mediaKind: "audio", mime: m.audioMessage.mimetype ?? null };
+  if (typeof m.conversation === "string" && m.conversation.trim())
+    return { content: m.conversation, mediaKind: "text", mime: null };
+  if (m.extendedTextMessage?.text)
+    return { content: m.extendedTextMessage.text, mediaKind: "text", mime: null };
+  if (m.imageMessage)
+    return {
+      content: m.imageMessage.caption ?? null,
+      mediaKind: "image",
+      mime: m.imageMessage.mimetype ?? null,
+    };
+  if (m.videoMessage)
+    return {
+      content: m.videoMessage.caption ?? null,
+      mediaKind: "video",
+      mime: m.videoMessage.mimetype ?? null,
+    };
+  if (m.audioMessage)
+    return { content: null, mediaKind: "audio", mime: m.audioMessage.mimetype ?? null };
   return { content: null, mediaKind: "other", mime: null };
 }
 
@@ -80,10 +97,12 @@ function uniq(values: Array<string | null | undefined>): string[] {
 }
 
 function slugTopic(value: string): string {
-  return normalizeText(value)
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 60) || "outros";
+  return (
+    normalizeText(value)
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 60) || "outros"
+  );
 }
 
 function matchVocabulary(content: string, rows: VocabularyRow[]) {
@@ -176,13 +195,15 @@ export async function ingestEvolutionMessages(
         details: { source: "whatsapp", group_id: groupId },
       },
       ...(authorHash
-        ? [{
-            org_id: ctx.orgId,
-            event_type: "anonymization" as const,
-            subject_kind: "author",
-            subject_id: authorHash,
-            details: { method: "sha256-org-salt" },
-          }]
+        ? [
+            {
+              org_id: ctx.orgId,
+              event_type: "anonymization" as const,
+              subject_kind: "author",
+              subject_id: authorHash,
+              details: { method: "sha256-org-salt" },
+            },
+          ]
         : []),
     ]);
   }
@@ -252,14 +273,13 @@ export async function runAnalysisForMessages(orgId: string, messageIds: string[]
 
   const { data: msgs } = await supabaseAdmin
     .from("raw_messages")
-    .select("id, content, group:whatsapp_groups(subject, neighborhood_tag), source:sources(kind, label)")
+    .select(
+      "id, content, group:whatsapp_groups(subject, neighborhood_tag), source:sources(kind, label)",
+    )
     .in("id", messageIds);
   if (!msgs || msgs.length === 0) return;
 
-  const [vocab, vocabRows] = await Promise.all([
-    loadVocabulary(orgId),
-    loadVocabularyRows(orgId),
-  ]);
+  const [vocab, vocabRows] = await Promise.all([loadVocabulary(orgId), loadVocabularyRows(orgId)]);
 
   const inputs = msgs
     .filter((m) => m.content)
@@ -303,18 +323,30 @@ export async function runAnalysisForMessages(orgId: string, messageIds: string[]
             ...matches.sensitive_term,
             ...matches.focus_term,
           ]);
-          const fallbackTopic = matches.focus_term[0] ?? matches.sensitive_term[0] ?? matches.facility[0];
-          const hasPriorityTerm = matches.focus_term.length > 0 || matches.sensitive_term.length > 0;
-          const isExternal = msg?.sourceKind === "news" || msg?.sourceKind === "instagram" || msg?.sourceKind === "facebook" || msg?.sourceKind === "x";
+          const fallbackTopic =
+            matches.focus_term[0] ?? matches.sensitive_term[0] ?? matches.facility[0];
+          const hasPriorityTerm =
+            matches.focus_term.length > 0 || matches.sensitive_term.length > 0;
+          const isExternal =
+            msg?.sourceKind === "news" ||
+            msg?.sourceKind === "instagram" ||
+            msg?.sourceKind === "facebook" ||
+            msg?.sourceKind === "x";
 
           return {
             org_id: orgId,
             message_id: r.id,
             sentiment: Math.max(-1, Math.min(1, Number(r.sentiment ?? 0))),
             intensity: Math.max(0, Math.min(1, Number(r.intensity ?? 0))),
-            topic: r.topic && r.topic !== "outros" ? r.topic : fallbackTopic ? slugTopic(fallbackTopic) : "outros",
+            topic:
+              r.topic && r.topic !== "outros"
+                ? r.topic
+                : fallbackTopic
+                  ? slugTopic(fallbackTopic)
+                  : "outros",
             subtopic: r.subtopic ?? fallbackTopic ?? null,
-            neighborhood: r.neighborhood ?? matches.neighborhood[0] ?? msg?.groupNeighborhood ?? null,
+            neighborhood:
+              r.neighborhood ?? matches.neighborhood[0] ?? msg?.groupNeighborhood ?? null,
             mentioned_opponents: uniq([...(r.mentioned_opponents ?? []), ...matches.opponent]),
             mentioned_allies: uniq([...(r.mentioned_allies ?? []), ...matches.ally]),
             mentioned_entities: uniq([...(r.mentioned_entities ?? []), ...matchedEntities]),
@@ -323,7 +355,9 @@ export async function runAnalysisForMessages(orgId: string, messageIds: string[]
               0,
               Math.min(
                 100,
-                Math.round(Number(r.risk_score ?? 0)) + (hasPriorityTerm ? 8 : 0) + (isExternal ? 5 : 0),
+                Math.round(Number(r.risk_score ?? 0)) +
+                  (hasPriorityTerm ? 8 : 0) +
+                  (isExternal ? 5 : 0),
               ),
             ),
             summary: r.summary ?? null,
@@ -392,7 +426,8 @@ export async function runAnalysisForPendingAllOrgs(
     .eq("is_demo", false);
   if (error) throw new Error(error.message);
 
-  const results: Array<{ org_id: string; analyzed?: number; selected?: number; error?: string }> = [];
+  const results: Array<{ org_id: string; analyzed?: number; selected?: number; error?: string }> =
+    [];
   for (const org of orgs ?? []) {
     try {
       const result = await runAnalysisForPendingMessages(org.id, limitPerOrg);
@@ -406,7 +441,14 @@ export async function runAnalysisForPendingAllOrgs(
 
 async function rollupTopicsAndAlerts(
   orgId: string,
-  rows: Array<{ message_id: string; topic: string; neighborhood: string | null; risk_score: number; sentiment: number; summary: string | null }>,
+  rows: Array<{
+    message_id: string;
+    topic: string;
+    neighborhood: string | null;
+    risk_score: number;
+    sentiment: number;
+    summary: string | null;
+  }>,
 ): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -430,13 +472,20 @@ async function rollupTopicsAndAlerts(
     const prevCount = existing?.message_count ?? 0;
     const prevAvg = Number(existing?.avg_sentiment ?? 0);
     const newCount = prevCount + items.length;
-    const newAvg = (prevAvg * prevCount + items.reduce((s, i) => s + Number(i.sentiment ?? 0), 0)) / newCount;
+    const newAvg =
+      (prevAvg * prevCount + items.reduce((s, i) => s + Number(i.sentiment ?? 0), 0)) / newCount;
     const maxRisk = Math.max(existing?.max_risk ?? 0, ...items.map((i) => i.risk_score));
-    const samples = [...(existing?.sample_message_ids ?? []), ...items.map((i) => i.message_id)].slice(-10);
+    const samples = [
+      ...(existing?.sample_message_ids ?? []),
+      ...items.map((i) => i.message_id),
+    ].slice(-10);
 
     // Top neighborhoods rough accumulation
     const neighMap = new Map<string, number>();
-    for (const entry of (existing?.top_neighborhoods as Array<{ label: string; count: number }> | null) ?? []) {
+    for (const entry of (existing?.top_neighborhoods as Array<{
+      label: string;
+      count: number;
+    }> | null) ?? []) {
       neighMap.set(entry.label, entry.count);
     }
     for (const i of items) {

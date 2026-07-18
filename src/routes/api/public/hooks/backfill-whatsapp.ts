@@ -18,14 +18,16 @@ export const Route = createFileRoute("/api/public/hooks/backfill-whatsapp")({
         const days = Math.min(60, Math.max(1, Number(body.days ?? 14)));
         // Default: only run when there was NO whatsapp message in last 24h.
         // Pass onlyIfStaleHours=0 (or negative) to force a run.
-        const onlyIfStaleHours = body.onlyIfStaleHours === undefined ? 24 : Number(body.onlyIfStaleHours);
+        const onlyIfStaleHours =
+          body.onlyIfStaleHours === undefined ? 24 : Number(body.onlyIfStaleHours);
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { backfillAllInstancesForOrg } = await import("@/lib/backfill.server");
 
         const orgs = body.orgId
           ? [{ id: body.orgId }]
-          : ((await supabaseAdmin.from("organizations").select("id").eq("is_demo", false)).data ?? []);
+          : ((await supabaseAdmin.from("organizations").select("id").eq("is_demo", false)).data ??
+            []);
 
         const results: Record<string, unknown> = {};
         for (const o of orgs) {

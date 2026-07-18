@@ -23,4 +23,3 @@ export const Route = createFileRoute("/api/public/hooks/detect-alerts")({
     },
   },
 });
-

@@ -53,6 +53,43 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
+  /* --- v2 redesign palette (direction 3a — warm cream) ---
+   * Scoped to .v2-root / .v2-site subtrees so the current app keeps its own tokens.
+   * Values live in the .v2-root block at the bottom of this file. */
+  --color-v2-bg: var(--v2-bg);
+  --color-v2-surface: var(--v2-surface);
+  --color-v2-card: var(--v2-card);
+  --color-v2-ink: var(--v2-ink);
+  --color-v2-ink-2: var(--v2-ink-2);
+  --color-v2-ink-3: var(--v2-ink-3);
+  --color-v2-faint: var(--v2-faint);
+  --color-v2-line: var(--v2-line);
+  --color-v2-line-strong: var(--v2-line-strong);
+  --color-v2-track: var(--v2-track);
+  --color-v2-green: var(--v2-green);
+  --color-v2-green-hover: var(--v2-green-hover);
+  --color-v2-green-tint: var(--v2-green-tint);
+  --color-v2-green-border: var(--v2-green-border);
+  --color-v2-green-ink: var(--v2-green-ink);
+  --color-v2-panel: var(--v2-panel);
+  --color-v2-panel-ink: var(--v2-panel-ink);
+  --color-v2-mint: var(--v2-mint);
+  --color-v2-gold: var(--v2-gold);
+  --color-v2-panel-gold: var(--v2-panel-gold);
+  --color-v2-gold-ink: var(--v2-gold-ink);
+  --color-v2-crit: var(--v2-crit);
+  --color-v2-crit-bg: var(--v2-crit-bg);
+  --color-v2-warn: var(--v2-warn);
+  --color-v2-warn-strong: var(--v2-warn-strong);
+  --color-v2-warn-bg: var(--v2-warn-bg);
+  --color-v2-obs: var(--v2-obs);
+  --color-v2-obs-bg: var(--v2-obs-bg);
+  --color-v2-blue: var(--v2-blue);
+  --color-v2-blue-bg: var(--v2-blue-bg);
+  --color-v2-purple: var(--v2-purple);
+  --color-v2-purple-bg: var(--v2-purple-bg);
+
+  --font-instrument: "Instrument Sans", system-ui, sans-serif;
   --font-display: "Fraunces", ui-serif, Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-sans: -apple-system, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
@@ -147,7 +184,8 @@
     border-color: var(--color-border);
   }
 
-  html, body {
+  html,
+  body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
@@ -167,8 +205,13 @@
   }
 }
 
-.font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
-.font-mono { font-family: var(--font-mono); }
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
 
 .label-mono {
   font-family: var(--font-mono);
@@ -179,11 +222,121 @@
 }
 
 @media print {
-  body { background: white !important; color: black !important; }
-  aside, nav, [data-sidebar], .print\:hidden { display: none !important; }
-  main, .max-w-5xl, .max-w-7xl { max-width: 100% !important; padding: 0 !important; }
-  .bg-surface, .bg-surface-2, .bg-card { background: white !important; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
-  .text-primary, .text-emerald-500, .text-destructive { color: black !important; }
-  .prose { color: black !important; }
-  a { color: black !important; text-decoration: none !important; }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  aside,
+  nav,
+  [data-sidebar],
+  .print\:hidden {
+    display: none !important;
+  }
+  main,
+  .max-w-5xl,
+  .max-w-7xl {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+  .bg-surface,
+  .bg-surface-2,
+  .bg-card {
+    background: white !important;
+    box-shadow: none !important;
+    border: 1px solid #e5e7eb !important;
+  }
+  .text-primary,
+  .text-emerald-500,
+  .text-destructive {
+    color: black !important;
+  }
+  .prose {
+    color: black !important;
+  }
+  a {
+    color: black !important;
+    text-decoration: none !important;
+  }
+}
+
+/* ============================================================
+ * v2 redesign — warm cream design system (direction 3a).
+ * Everything under .v2-root (app) or .v2-site (marketing) opts
+ * into this palette + Instrument Sans body, independent of the
+ * global light/dark theme. The legacy app is untouched.
+ * ============================================================ */
+.v2-root,
+.v2-site {
+  --v2-bg: #e9e7e2;
+  --v2-surface: #fbfaf7;
+  --v2-card: #ffffff;
+  --v2-ink: #211f1c;
+  --v2-ink-2: #5c574f;
+  --v2-ink-3: #77726a;
+  --v2-faint: #a39d92;
+  --v2-line: #e7e4dc;
+  --v2-line-strong: #d8d4ca;
+  --v2-track: #f1efe9;
+
+  --v2-green: #0e7b5b;
+  --v2-green-hover: #0a5c44;
+  --v2-green-tint: #eef5f1;
+  --v2-green-border: #d3e5dc;
+  --v2-green-ink: #33473e;
+  --v2-panel: #123528;
+  --v2-panel-ink: #a8c7b9;
+  --v2-mint: #7fd0b2;
+
+  --v2-gold: #d9a441;
+  --v2-panel-gold: #3d2f14;
+  --v2-gold-ink: #d8c9a6;
+
+  --v2-crit: #c43d2b;
+  --v2-crit-bg: #faeae6;
+  --v2-warn: #a56a1e;
+  --v2-warn-strong: #e0a33b;
+  --v2-warn-bg: #f9efdd;
+  --v2-obs: #77726a;
+  --v2-obs-bg: #f1efe9;
+  --v2-blue: #3d6ea5;
+  --v2-blue-bg: #e9f1f7;
+  --v2-purple: #7a5ba8;
+  --v2-purple-bg: #f0eaf6;
+
+  font-family: "Instrument Sans", system-ui, sans-serif;
+  color: var(--v2-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.v2-root {
+  background-color: var(--v2-bg);
+}
+.v2-site {
+  background-color: var(--v2-bg);
+}
+
+/* v2 typographic helpers */
+.v2-root .font-display,
+.v2-site .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+.v2-root .font-mono,
+.v2-site .font-mono {
+  font-family: var(--font-mono);
+}
+.v2-mono-label {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.v2-root a,
+.v2-site a {
+  color: var(--v2-green);
+  text-decoration: none;
+}
+.v2-root a:hover,
+.v2-site a:hover {
+  color: var(--v2-green-hover);
 }

@@ -117,10 +117,13 @@ function UsersTab() {
   const [fullName, setFullName] = useState("");
 
   const createMut = useMutation({
-    mutationFn: () => adminCreateUser({ data: { email, password, fullName: fullName || undefined } }),
+    mutationFn: () =>
+      adminCreateUser({ data: { email, password, fullName: fullName || undefined } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-users"] });
-      setEmail(""); setPassword(""); setFullName("");
+      setEmail("");
+      setPassword("");
+      setFullName("");
       toast.success("Usuário criado");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
@@ -152,7 +155,12 @@ function UsersTab() {
           </div>
           <div>
             <Label>Senha temporária</Label>
-            <Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mín. 8 caracteres" />
+            <Input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="mín. 8 caracteres"
+            />
           </div>
         </div>
         <Button
@@ -182,7 +190,15 @@ function UsersTab() {
 type AdminUser = Awaited<ReturnType<typeof adminListUsers>>[number];
 type AdminOrg = Awaited<ReturnType<typeof adminListOrgs>>[number];
 
-function UserRow({ user, orgs, onDelete }: { user: AdminUser; orgs: AdminOrg[]; onDelete: () => void }) {
+function UserRow({
+  user,
+  orgs,
+  onDelete,
+}: {
+  user: AdminUser;
+  orgs: AdminOrg[];
+  onDelete: () => void;
+}) {
   const qc = useQueryClient();
   const [newPass, setNewPass] = useState("");
   const [orgId, setOrgId] = useState<string>("");
@@ -190,7 +206,10 @@ function UserRow({ user, orgs, onDelete }: { user: AdminUser; orgs: AdminOrg[]; 
 
   const passMut = useMutation({
     mutationFn: () => adminSetPassword({ data: { userId: user.id, password: newPass } }),
-    onSuccess: () => { toast.success("Senha atualizada"); setNewPass(""); },
+    onSuccess: () => {
+      toast.success("Senha atualizada");
+      setNewPass("");
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
   const addMemMut = useMutation({
@@ -241,10 +260,14 @@ function UserRow({ user, orgs, onDelete }: { user: AdminUser; orgs: AdminOrg[]; 
         <div className="md:col-span-2">
           <Label className="text-xs">Vincular à organização</Label>
           <Select value={orgId} onValueChange={setOrgId}>
-            <SelectTrigger><SelectValue placeholder="Escolher…" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue placeholder="Escolher…" />
+            </SelectTrigger>
             <SelectContent>
               {orgs.map((o) => (
-                <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                <SelectItem key={o.id} value={o.id}>
+                  {o.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -252,7 +275,9 @@ function UserRow({ user, orgs, onDelete }: { user: AdminUser; orgs: AdminOrg[]; 
         <div>
           <Label className="text-xs">Papel</Label>
           <Select value={role} onValueChange={(v) => setRole(v as typeof role)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="owner">owner</SelectItem>
               <SelectItem value="analyst">analyst</SelectItem>
@@ -272,7 +297,11 @@ function UserRow({ user, orgs, onDelete }: { user: AdminUser; orgs: AdminOrg[]; 
       <div className="flex items-end gap-2">
         <div className="flex-1">
           <Label className="text-xs">Nova senha</Label>
-          <Input value={newPass} onChange={(e) => setNewPass(e.target.value)} placeholder="mín. 8" />
+          <Input
+            value={newPass}
+            onChange={(e) => setNewPass(e.target.value)}
+            placeholder="mín. 8"
+          />
         </div>
         <Button
           size="sm"
@@ -300,10 +329,13 @@ function OrgsTab() {
   const [state, setState] = useState("");
 
   const createMut = useMutation({
-    mutationFn: () => adminCreateOrg({ data: { name, city: city || undefined, state: state || undefined } }),
+    mutationFn: () =>
+      adminCreateOrg({ data: { name, city: city || undefined, state: state || undefined } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-orgs"] });
-      setName(""); setCity(""); setState("");
+      setName("");
+      setCity("");
+      setState("");
       toast.success("Organização criada");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
@@ -350,7 +382,9 @@ function OrgsTab() {
                 {o.name}
                 {o.is_demo && <Badge variant="outline">demo</Badge>}
               </div>
-              <div className="label-mono mt-1">{o.city ?? "—"} / {o.state ?? "—"} · {o.slug}</div>
+              <div className="label-mono mt-1">
+                {o.city ?? "—"} / {o.state ?? "—"} · {o.slug}
+              </div>
             </div>
             <Button
               size="sm"
@@ -413,7 +447,11 @@ function WhatsappTab() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
 
-  const { data: evoData, refetch: refetchInstances, isFetching: instancesLoading } = useQuery({
+  const {
+    data: evoData,
+    refetch: refetchInstances,
+    isFetching: instancesLoading,
+  } = useQuery({
     queryKey: ["admin-evolution-instances"],
     queryFn: () => adminListEvolutionInstances(),
     enabled: !!settings?.evolution_base_url,
@@ -439,7 +477,8 @@ function WhatsappTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-org-numbers"] });
       qc.invalidateQueries({ queryKey: ["instances", orgId] });
-      setSelectedInstance(""); setLabel("");
+      setSelectedInstance("");
+      setLabel("");
       toast.success("Instância vinculada");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
@@ -458,16 +497,33 @@ function WhatsappTab() {
       <Card className="p-6 bg-surface space-y-3">
         <h3 className="font-display text-lg">Conexão Evolution (sistema)</h3>
         <p className="text-xs text-muted-foreground">
-          Configure a URL base e a API Key. As instâncias existentes na Evolution serão listadas abaixo para vincular a organizações.
+          Configure a URL base e a API Key. As instâncias existentes na Evolution serão listadas
+          abaixo para vincular a organizações.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <Label>Base URL {savedUrl && <span className="text-xs text-muted-foreground">· atual: {savedUrl}</span>}</Label>
-            <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder={savedUrl || "https://zap.hebe.digital"} />
+            <Label>
+              Base URL{" "}
+              {savedUrl && (
+                <span className="text-xs text-muted-foreground">· atual: {savedUrl}</span>
+              )}
+            </Label>
+            <Input
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder={savedUrl || "https://zap.hebe.digital"}
+            />
           </div>
           <div>
-            <Label>API Key <span className="text-xs text-muted-foreground">· vazio mantém a atual</span></Label>
-            <Input value={apiKey} type="password" onChange={(e) => setApiKey(e.target.value)} placeholder="••••" />
+            <Label>
+              API Key <span className="text-xs text-muted-foreground">· vazio mantém a atual</span>
+            </Label>
+            <Input
+              value={apiKey}
+              type="password"
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="••••"
+            />
           </div>
         </div>
         <div className="flex gap-2">
@@ -478,9 +534,7 @@ function WhatsappTab() {
             {instancesLoading ? "Consultando…" : "Testar / listar instâncias"}
           </Button>
         </div>
-        {evoData?.error && (
-          <p className="text-xs text-destructive">{evoData.error}</p>
-        )}
+        {evoData?.error && <p className="text-xs text-destructive">{evoData.error}</p>}
         {instances.length > 0 && (
           <p className="text-xs text-muted-foreground">
             {instances.length} instância(s) disponíveis na Evolution.
@@ -496,10 +550,14 @@ function WhatsappTab() {
           <div>
             <Label>Organização</Label>
             <Select value={orgId} onValueChange={setOrgId}>
-              <SelectTrigger><SelectValue placeholder="Escolher…" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Escolher…" />
+              </SelectTrigger>
               <SelectContent>
                 {orgs.map((o) => (
-                  <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -508,7 +566,9 @@ function WhatsappTab() {
             <Label>Instância Evolution</Label>
             <Select value={selectedInstance} onValueChange={setSelectedInstance}>
               <SelectTrigger>
-                <SelectValue placeholder={instances.length ? "Escolher instância…" : "Nenhuma instância"} />
+                <SelectValue
+                  placeholder={instances.length ? "Escolher instância…" : "Nenhuma instância"}
+                />
               </SelectTrigger>
               <SelectContent>
                 {instances.map((i) => (
@@ -523,7 +583,11 @@ function WhatsappTab() {
           </div>
           <div>
             <Label>Rótulo (opcional)</Label>
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Gabinete Jundiaí" />
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Gabinete Jundiaí"
+            />
           </div>
           <Button
             onClick={() => assignMut.mutate()}
@@ -534,7 +598,6 @@ function WhatsappTab() {
         </div>
       </Card>
 
-
       <div className="space-y-2">
         {numbers.map((n) => {
           const org = n.organizations as { id: string; name: string } | null;
@@ -542,7 +605,9 @@ function WhatsappTab() {
             <Card key={n.id} className="p-3 bg-surface flex items-center justify-between gap-3">
               <div>
                 <div className="font-medium">{n.label ?? n.phone_jid}</div>
-                <div className="label-mono mt-1">{n.phone_jid} → {org?.name ?? "?"}</div>
+                <div className="label-mono mt-1">
+                  {n.phone_jid} → {org?.name ?? "?"}
+                </div>
               </div>
               <Button
                 size="sm"

@@ -26,7 +26,9 @@ async function firecrawlSearch(query: string, limit = 8): Promise<FirecrawlSearc
     const body = await res.text().catch(() => "");
     throw new Error(`Firecrawl search failed [${res.status}]: ${body || res.statusText}`);
   }
-  const j = (await res.json()) as { data?: { web?: FirecrawlSearchResult[] } | FirecrawlSearchResult[] };
+  const j = (await res.json()) as {
+    data?: { web?: FirecrawlSearchResult[] } | FirecrawlSearchResult[];
+  };
   const items = Array.isArray(j.data) ? j.data : (j.data?.web ?? []);
   return items;
 }
@@ -46,7 +48,6 @@ async function firecrawlScrape(url: string): Promise<{ markdown?: string; title?
   const j = (await res.json()) as { data?: { markdown?: string; metadata?: { title?: string } } };
   return { markdown: j.data?.markdown, title: j.data?.metadata?.title };
 }
-
 
 type NewsKind = "news" | "instagram" | "facebook" | "x" | "web_search";
 
@@ -72,7 +73,9 @@ function externalId(url: string): string {
   return createHash("sha256").update(url).digest("hex").slice(0, 40);
 }
 
-export async function scanNewsForOrg(orgId: string): Promise<{ inserted: number; queries: number }> {
+export async function scanNewsForOrg(
+  orgId: string,
+): Promise<{ inserted: number; queries: number }> {
   if (!process.env.FIRECRAWL_API_KEY) return { inserted: 0, queries: 0 };
   // Build queries from org_vocabulary: city/facility/opponent terms + neighborhood
   const { data: vocab } = await supabaseAdmin
@@ -162,7 +165,8 @@ export async function scanNewsForOrg(orgId: string): Promise<{ inserted: number;
     if (scraped < MAX_SCRAPES) {
       const s = await firecrawlScrape(url);
       scraped++;
-      if (s?.markdown) content = [r.title ?? s.title, r.description, s.markdown].filter(Boolean).join("\n\n");
+      if (s?.markdown)
+        content = [r.title ?? s.title, r.description, s.markdown].filter(Boolean).join("\n\n");
     }
     content = content.slice(0, 4000);
     if (!content) continue;
@@ -179,7 +183,6 @@ export async function scanNewsForOrg(orgId: string): Promise<{ inserted: number;
   }
   return { inserted, queries };
 }
-
 
 export async function scanNewsAllOrgs(): Promise<
   Array<{ org_id: string; inserted?: number; queries?: number; error?: string }>

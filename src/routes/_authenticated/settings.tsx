@@ -9,11 +9,7 @@ import {
   deleteInstance,
 } from "@/lib/whatsapp.functions";
 import { usePlatformAdmin } from "@/lib/use-platform-admin";
-import {
-  listVocabulary,
-  addVocabulary,
-  removeVocabulary,
-} from "@/lib/vocabulary.functions";
+import { listVocabulary, addVocabulary, removeVocabulary } from "@/lib/vocabulary.functions";
 import {
   tseListMunicipios,
   importElected,
@@ -72,8 +68,7 @@ const VOCAB_KINDS = [
 
 function Settings() {
   const { orgId } = useCurrentOrg();
-  if (!orgId)
-    return <div className="p-8 text-muted-foreground">Selecione uma organização.</div>;
+  if (!orgId) return <div className="p-8 text-muted-foreground">Selecione uma organização.</div>;
 
   return (
     <div className="p-8 max-w-5xl space-y-6">
@@ -120,7 +115,9 @@ function InstancesTab({ orgId }: { orgId: string }) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["instances", orgId] });
-      setName(""); setUrl(""); setKey("");
+      setName("");
+      setUrl("");
+      setKey("");
       toast.success("Instância adicionada");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
@@ -140,22 +137,35 @@ function InstancesTab({ orgId }: { orgId: string }) {
       {isAdmin && (
         <Card className="p-6 bg-surface space-y-3">
           <h3 className="font-display text-lg">Conectar instância WhatsApp</h3>
-          <p className="text-xs text-muted-foreground">Visível apenas para administradores da plataforma.</p>
+          <p className="text-xs text-muted-foreground">
+            Visível apenas para administradores da plataforma.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <Label>Nome (instance)</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="gabinete-jundiai" />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="gabinete-jundiai"
+              />
             </div>
             <div>
               <Label>Base URL</Label>
-              <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://evo.exemplo.com" />
+              <Input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://evo.exemplo.com"
+              />
             </div>
             <div>
               <Label>API Key</Label>
               <Input value={key} onChange={(e) => setKey(e.target.value)} type="password" />
             </div>
           </div>
-          <Button onClick={() => create.mutate()} disabled={create.isPending || !name || !url || !key}>
+          <Button
+            onClick={() => create.mutate()}
+            disabled={create.isPending || !name || !url || !key}
+          >
             Adicionar
           </Button>
         </Card>
@@ -184,7 +194,6 @@ function InstancesTab({ orgId }: { orgId: string }) {
   );
 }
 
-
 type InstanceRow = {
   id: string;
   instance_name: string;
@@ -200,12 +209,24 @@ function statusVariant(state: string | null | undefined): {
 } {
   const s = (state ?? "").toLowerCase();
   if (s === "open" || s === "ok" || s === "connected")
-    return { label: "conectado", className: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30" };
+    return {
+      label: "conectado",
+      className: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
+    };
   if (s === "connecting" || s === "qr" || s === "pending" || s === "pendente")
-    return { label: state ?? "conectando", className: "bg-amber-500/15 text-amber-500 border-amber-500/30" };
+    return {
+      label: state ?? "conectando",
+      className: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+    };
   if (s === "close" || s === "closed" || s === "disconnected" || s === "error")
-    return { label: state ?? "desconectado", className: "bg-destructive/15 text-destructive border-destructive/30" };
-  return { label: state ?? "desconhecido", className: "bg-muted text-muted-foreground border-border" };
+    return {
+      label: state ?? "desconectado",
+      className: "bg-destructive/15 text-destructive border-destructive/30",
+    };
+  return {
+    label: state ?? "desconhecido",
+    className: "bg-muted text-muted-foreground border-border",
+  };
 }
 
 function InstanceCard({
@@ -246,9 +267,7 @@ function InstanceCard({
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="font-medium truncate">{i.instance_name}</div>
-          {isAdmin && (
-            <div className="label-mono mt-1 truncate">{i.evolution_base_url}</div>
-          )}
+          {isAdmin && <div className="label-mono mt-1 truncate">{i.evolution_base_url}</div>}
           {i.last_seen_at && (
             <div className="text-xs text-muted-foreground mt-1">
               Visto em {new Date(i.last_seen_at).toLocaleString("pt-BR")}
@@ -256,7 +275,9 @@ function InstanceCard({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="outline" className={v.className}>{v.label}</Badge>
+          <Badge variant="outline" className={v.className}>
+            {v.label}
+          </Badge>
           <Button
             size="sm"
             variant="ghost"
@@ -271,7 +292,11 @@ function InstanceCard({
               size="sm"
               variant="ghost"
               onClick={() => {
-                if (confirm(`Remover a instância "${i.instance_name}"? Grupos vinculados serão apagados.`))
+                if (
+                  confirm(
+                    `Remover a instância "${i.instance_name}"? Grupos vinculados serão apagados.`,
+                  )
+                )
                   del.mutate();
               }}
               disabled={del.isPending}
@@ -301,8 +326,6 @@ function InstanceCard({
   );
 }
 
-
-
 function VocabTab({ orgId }: { orgId: string }) {
   const qc = useQueryClient();
   const { data: items = [] } = useQuery({
@@ -310,7 +333,7 @@ function VocabTab({ orgId }: { orgId: string }) {
     queryFn: () => listVocabulary({ data: { orgId } }),
   });
 
-  const [kind, setKind] = useState<typeof VOCAB_KINDS[number][0]>("neighborhood");
+  const [kind, setKind] = useState<(typeof VOCAB_KINDS)[number][0]>("neighborhood");
   const [value, setValue] = useState("");
 
   const add = useMutation({
@@ -337,10 +360,14 @@ function VocabTab({ orgId }: { orgId: string }) {
         <div className="flex-1 min-w-0">
           <Label>Tipo</Label>
           <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               {VOCAB_KINDS.map(([k, label]) => (
-                <SelectItem key={k} value={k}>{label}</SelectItem>
+                <SelectItem key={k} value={k}>
+                  {label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -349,7 +376,9 @@ function VocabTab({ orgId }: { orgId: string }) {
           <Label>Valor</Label>
           <Input value={value} onChange={(e) => setValue(e.target.value)} />
         </div>
-        <Button onClick={() => add.mutate()} disabled={!value.trim()}>Adicionar</Button>
+        <Button onClick={() => add.mutate()} disabled={!value.trim()}>
+          Adicionar
+        </Button>
       </Card>
 
       {VOCAB_KINDS.map(([k, label]) => (
@@ -375,7 +404,35 @@ function VocabTab({ orgId }: { orgId: string }) {
 }
 
 const ELECTION_YEARS = [2024, 2020, 2016, 2012];
-const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+const UFS = [
+  "AC",
+  "AL",
+  "AP",
+  "AM",
+  "BA",
+  "CE",
+  "DF",
+  "ES",
+  "GO",
+  "MA",
+  "MT",
+  "MS",
+  "MG",
+  "PA",
+  "PB",
+  "PR",
+  "PE",
+  "PI",
+  "RJ",
+  "RN",
+  "RS",
+  "RO",
+  "RR",
+  "SC",
+  "SP",
+  "SE",
+  "TO",
+];
 
 function ElectedTab({ orgId }: { orgId: string }) {
   const qc = useQueryClient();
@@ -396,13 +453,11 @@ function ElectedTab({ orgId }: { orgId: string }) {
 
   const listQuery = useQuery({
     queryKey: ["elected", orgId, filterAlign, onlyElected],
-    queryFn: () =>
-      listElected({ data: { orgId, alignment: filterAlign, onlyElected } }),
+    queryFn: () => listElected({ data: { orgId, alignment: filterAlign, onlyElected } }),
   });
 
   const importMut = useMutation({
-    mutationFn: () =>
-      importElected({ data: { orgId, uf, codMunicipioTse: muniCode, ano: year } }),
+    mutationFn: () => importElected({ data: { orgId, uf, codMunicipioTse: muniCode, ano: year } }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ["elected", orgId] });
       toast.success(`${r.imported} candidatos importados (${r.elected} eleitos)`);
@@ -446,10 +501,23 @@ function ElectedTab({ orgId }: { orgId: string }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
             <Label>UF</Label>
-            <Select value={uf} onValueChange={(v) => { setUf(v); setMuniCode(""); setMuniName(""); }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select
+              value={uf}
+              onValueChange={(v) => {
+                setUf(v);
+                setMuniCode("");
+                setMuniName("");
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                {UFS.map((u) => (
+                  <SelectItem key={u} value={u}>
+                    {u}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -457,7 +525,12 @@ function ElectedTab({ orgId }: { orgId: string }) {
             <Label>Município</Label>
             <Popover open={muniOpen} onOpenChange={setMuniOpen}>
               <PopoverTrigger asChild>
-                <Button variant="outline" role="combobox" className="w-full justify-between font-normal" disabled={muniQuery.isLoading}>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="w-full justify-between font-normal"
+                  disabled={muniQuery.isLoading}
+                >
                   {muniName || (muniQuery.isLoading ? "Carregando..." : "Selecione")}
                   <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
                 </Button>
@@ -472,9 +545,18 @@ function ElectedTab({ orgId }: { orgId: string }) {
                         <CommandItem
                           key={m.codigo}
                           value={m.nome}
-                          onSelect={() => { setMuniCode(m.codigo); setMuniName(m.nome); setMuniOpen(false); }}
+                          onSelect={() => {
+                            setMuniCode(m.codigo);
+                            setMuniName(m.nome);
+                            setMuniOpen(false);
+                          }}
                         >
-                          <Check className={cn("mr-2 h-4 w-4", muniCode === m.codigo ? "opacity-100" : "opacity-0")} />
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              muniCode === m.codigo ? "opacity-100" : "opacity-0",
+                            )}
+                          />
                           {m.nome}
                         </CommandItem>
                       ))}
@@ -487,32 +569,40 @@ function ElectedTab({ orgId }: { orgId: string }) {
           <div>
             <Label>Eleição</Label>
             <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {ELECTION_YEARS.map((y) => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                {ELECTION_YEARS.map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
-        <Button
-          onClick={() => importMut.mutate()}
-          disabled={importMut.isPending || !muniCode}
-        >
+        <Button onClick={() => importMut.mutate()} disabled={importMut.isPending || !muniCode}>
           <Download className="size-4 mr-2" />
           {importMut.isPending ? "Importando..." : "Importar candidatos"}
         </Button>
         <p className="text-xs text-muted-foreground">
-          Anos pares municipais (2024, 2020, 2016) trazem prefeito/vice/vereador. Anos pares gerais (2022, 2018) trazem deputados/governador/senador.
+          Anos pares municipais (2024, 2020, 2016) trazem prefeito/vice/vereador. Anos pares gerais
+          (2022, 2018) trazem deputados/governador/senador.
         </p>
       </Card>
 
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <Switch checked={onlyElected} onCheckedChange={setOnlyElected} id="only-elected" />
-          <Label htmlFor="only-elected" className="cursor-pointer">Apenas eleitos</Label>
+          <Label htmlFor="only-elected" className="cursor-pointer">
+            Apenas eleitos
+          </Label>
         </div>
         <Select value={filterAlign} onValueChange={(v) => setFilterAlign(v as typeof filterAlign)}>
-          <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos alinhamentos</SelectItem>
             <SelectItem value="management">Gestão</SelectItem>
@@ -533,7 +623,9 @@ function ElectedTab({ orgId }: { orgId: string }) {
         </Button>
       </div>
       <p className="text-xs text-muted-foreground -mt-2">
-        Eleitos marcados como <strong>Gestão</strong>, <strong>Aliado</strong> ou <strong>Opositor</strong> entram automaticamente no vocabulário e passam a ser mensurados pelo sistema (Gestão vira <em>Palavra de foco</em>).
+        Eleitos marcados como <strong>Gestão</strong>, <strong>Aliado</strong> ou{" "}
+        <strong>Opositor</strong> entram automaticamente no vocabulário e passam a ser mensurados
+        pelo sistema (Gestão vira <em>Palavra de foco</em>).
       </p>
 
       <div className="space-y-2">
@@ -555,9 +647,16 @@ function ElectedTab({ orgId }: { orgId: string }) {
             </div>
             <Select
               value={p.alignment}
-              onValueChange={(v) => alignMut.mutate({ id: p.id, alignment: v as "ally" | "opponent" | "neutral" | "management" })}
+              onValueChange={(v) =>
+                alignMut.mutate({
+                  id: p.id,
+                  alignment: v as "ally" | "opponent" | "neutral" | "management",
+                })
+              }
             >
-              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-36">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="neutral">Neutro</SelectItem>
                 <SelectItem value="management">Gestão</SelectItem>

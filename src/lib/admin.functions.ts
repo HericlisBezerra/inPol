@@ -294,7 +294,10 @@ export const adminListEvolutionInstances = createServerFn({ method: "GET" })
       const instances = await fetchInstances(s.evolution_base_url, s.evolution_api_key);
       return { instances, error: null };
     } catch (e) {
-      return { instances: [], error: e instanceof Error ? e.message : "Erro ao consultar Evolution" };
+      return {
+        instances: [],
+        error: e instanceof Error ? e.message : "Erro ao consultar Evolution",
+      };
     }
   });
 
@@ -345,13 +348,16 @@ export const adminAssignOrgNumber = createServerFn({ method: "POST" })
       throw new Error("Configure Base URL e API Key da Evolution antes de vincular.");
     }
 
-    const { error: numberError } = await supabaseAdmin.from("org_whatsapp_numbers").upsert({
-      org_id: data.orgId,
-      phone_jid: phoneJid,
-      label,
-      assigned_by: context.userId,
-      assigned_at: new Date().toISOString(),
-    }, { onConflict: "phone_jid" });
+    const { error: numberError } = await supabaseAdmin.from("org_whatsapp_numbers").upsert(
+      {
+        org_id: data.orgId,
+        phone_jid: phoneJid,
+        label,
+        assigned_by: context.userId,
+        assigned_at: new Date().toISOString(),
+      },
+      { onConflict: "phone_jid" },
+    );
     if (numberError) throw new Error(numberError.message);
 
     const { data: existing, error: existingError } = await supabaseAdmin
@@ -441,7 +447,10 @@ export const adminUnassignOrgNumber = createServerFn({ method: "POST" })
         if (instanceError) throw new Error(instanceError.message);
       }
       if (sourceIds.length > 0) {
-        const { error: sourceError } = await supabaseAdmin.from("sources").delete().in("id", sourceIds);
+        const { error: sourceError } = await supabaseAdmin
+          .from("sources")
+          .delete()
+          .in("id", sourceIds);
         if (sourceError) throw new Error(sourceError.message);
       }
     }

@@ -9,7 +9,8 @@ async function assertOrgOwner(supabase: any, userId: string, orgId: string) {
     _role: "owner",
   });
   const { data: platAdmin } = await supabase.rpc("is_platform_admin", { _user_id: userId });
-  if (!ok && !platAdmin) throw new Error("Somente o dono da organização pode alterar a política LGPD.");
+  if (!ok && !platAdmin)
+    throw new Error("Somente o dono da organização pode alterar a política LGPD.");
 }
 
 export const getLgpdPolicy = createServerFn({ method: "GET" })

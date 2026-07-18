@@ -6,7 +6,16 @@ import { useCurrentOrg } from "@/lib/use-current-org";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, MessageSquare, TrendingUp, MapPin, RefreshCw, Eye, Clock, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  MessageSquare,
+  TrendingUp,
+  MapPin,
+  RefreshCw,
+  Eye,
+  Clock,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -15,9 +24,12 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 });
 
 function levelColor(level: string) {
-  if (level === "critical" || level === "vermelho") return "bg-destructive/20 text-destructive border-destructive/40";
-  if (level === "high" || level === "laranja") return "bg-amber-500/20 text-amber-500 border-amber-500/40";
-  if (level === "medium" || level === "amarelo") return "bg-yellow-500/20 text-yellow-500 border-yellow-500/40";
+  if (level === "critical" || level === "vermelho")
+    return "bg-destructive/20 text-destructive border-destructive/40";
+  if (level === "high" || level === "laranja")
+    return "bg-amber-500/20 text-amber-500 border-amber-500/40";
+  if (level === "medium" || level === "amarelo")
+    return "bg-yellow-500/20 text-yellow-500 border-yellow-500/40";
   return "bg-muted text-muted-foreground border-border";
 }
 
@@ -32,8 +44,7 @@ function Dashboard() {
   });
 
   const ack = useMutation({
-    mutationFn: (alertId: string) =>
-      acknowledgeAlert({ data: { orgId: orgId!, alertId } }),
+    mutationFn: (alertId: string) => acknowledgeAlert({ data: { orgId: orgId!, alertId } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dashboard", orgId] });
       toast.success("Alerta arquivado");
@@ -57,7 +68,9 @@ function Dashboard() {
           icon={<Eye className="size-4" />}
           label="Cobertura de grupos monitorados"
           value={data?.kpi ? `${data.kpi.coverage}%` : "—"}
-          delta={data?.kpi ? `${data.kpi.monitored}/${data.kpi.totalGroups} grupos monitorados` : ""}
+          delta={
+            data?.kpi ? `${data.kpi.monitored}/${data.kpi.totalGroups} grupos monitorados` : ""
+          }
           tone="positive"
         />
         <KpiBig
@@ -106,9 +119,7 @@ function Dashboard() {
           {data?.alerts.map((a) => (
             <Card key={a.id} className="p-4 bg-surface">
               <div className="flex items-start gap-3">
-                <Badge className={`${levelColor(a.level)} border`}>
-                  {a.level}
-                </Badge>
+                <Badge className={`${levelColor(a.level)} border`}>{a.level}</Badge>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 text-sm">
                     <span className="font-medium">{a.topic ?? "Sem tópico"}</span>
@@ -194,16 +205,26 @@ function Stat({
         {icon}
         <span className="label-mono">{label}</span>
       </div>
-      <div
-        className={`font-display text-4xl mt-2 ${accent === "warn" ? "text-warning" : ""}`}
-      >
+      <div className={`font-display text-4xl mt-2 ${accent === "warn" ? "text-warning" : ""}`}>
         {value}
       </div>
     </Card>
   );
 }
 
-function KpiBig({ icon, label, value, delta, tone }: { icon: React.ReactNode; label: string; value: string; delta: string; tone: "positive" | "negative" }) {
+function KpiBig({
+  icon,
+  label,
+  value,
+  delta,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  delta: string;
+  tone: "positive" | "negative";
+}) {
   return (
     <Card className="p-5 bg-surface">
       <div className="flex items-center gap-2 text-muted-foreground">
@@ -211,7 +232,11 @@ function KpiBig({ icon, label, value, delta, tone }: { icon: React.ReactNode; la
         <span className="label-mono text-[10px]">{label}</span>
       </div>
       <div className="font-display text-4xl mt-2 text-primary">{value}</div>
-      <div className={`text-xs mt-1 ${tone === "positive" ? "text-emerald-500" : "text-destructive"}`}>{delta}</div>
+      <div
+        className={`text-xs mt-1 ${tone === "positive" ? "text-emerald-500" : "text-destructive"}`}
+      >
+        {delta}
+      </div>
     </Card>
   );
 }
@@ -229,9 +254,13 @@ function SyncButton({ orgId }: { orgId: string }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Falha na sincronização"),
   });
   return (
-    <Button onClick={() => mut.mutate()} disabled={mut.isPending} variant="outline" className="gap-2">
+    <Button
+      onClick={() => mut.mutate()}
+      disabled={mut.isPending}
+      variant="outline"
+      className="gap-2"
+    >
       <RefreshCw className={`size-4 ${mut.isPending ? "animate-spin" : ""}`} /> Sincronizar agora
     </Button>
   );
 }
-

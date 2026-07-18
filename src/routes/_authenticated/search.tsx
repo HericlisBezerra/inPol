@@ -49,9 +49,7 @@ function SearchPage() {
         <form onSubmit={onSearch} className="flex gap-2 mt-4">
           <Input
             placeholder={
-              tab === "internal"
-                ? "Buscar em mensagens dos grupos…"
-                : "Buscar em notícias locais…"
+              tab === "internal" ? "Buscar em mensagens dos grupos…" : "Buscar em notícias locais…"
             }
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -72,9 +70,7 @@ function SearchPage() {
             return (
               <Card key={r.id} className="p-4 bg-surface">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <span className="font-mono">
-                    {new Date(r.posted_at).toLocaleString("pt-BR")}
-                  </span>
+                  <span className="font-mono">{new Date(r.posted_at).toLocaleString("pt-BR")}</span>
                   {grp?.subject && <span>· {grp.subject}</span>}
                   {an?.neighborhood && <span>· {an.neighborhood}</span>}
                   {an?.risk_score != null && (
@@ -83,9 +79,7 @@ function SearchPage() {
                 </div>
                 <p className="text-sm">{r.content}</p>
                 {an?.summary && (
-                  <p className="text-xs text-muted-foreground mt-2 italic">
-                    {an.summary}
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-2 italic">{an.summary}</p>
                 )}
               </Card>
             );
@@ -107,9 +101,7 @@ function SearchPage() {
               >
                 {r.title} <ExternalLink className="size-3" />
               </a>
-              {r.source && (
-                <div className="label-mono mt-1">{r.source}</div>
-              )}
+              {r.source && <div className="label-mono mt-1">{r.source}</div>}
               <p className="text-sm text-muted-foreground mt-1">{r.snippet}</p>
             </Card>
           ))}

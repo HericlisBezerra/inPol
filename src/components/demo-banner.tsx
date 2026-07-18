@@ -7,7 +7,8 @@ export function DemoBanner({ orgName }: { orgName: string }) {
       <span className="font-medium text-primary">Modo Demonstração</span>
       <span className="text-muted-foreground">·</span>
       <span className="text-muted-foreground">
-        {orgName} · dados fictícios para apresentação comercial. Nada aqui está conectado a sistemas reais.
+        {orgName} · dados fictícios para apresentação comercial. Nada aqui está conectado a sistemas
+        reais.
       </span>
     </div>
   );

@@ -1,0 +1,24 @@
+import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { V2ErrorComponent, V2NotFound } from "@/components/v2/error-boundary";
+
+export const Route = createFileRoute("/site")({
+  head: () => ({
+    links: [
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap",
+      },
+    ],
+  }),
+  component: SiteLayout,
+  errorComponent: V2ErrorComponent,
+  notFoundComponent: V2NotFound,
+});
+
+function SiteLayout() {
+  return (
+    <div className="v2-site min-h-screen">
+      <Outlet />
+    </div>
+  );
+}

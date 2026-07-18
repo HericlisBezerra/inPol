@@ -14,7 +14,11 @@ function periodFor(kind: Kind, now = new Date()): { start: Date; end: Date; titl
   }
   if (kind === "weekly") {
     const start = new Date(end.getTime() - 7 * 86400_000);
-    return { start, end, title: `Relatório semanal — semana de ${start.toISOString().slice(0, 10)}` };
+    return {
+      start,
+      end,
+      title: `Relatório semanal — semana de ${start.toISOString().slice(0, 10)}`,
+    };
   }
   const start = new Date(end.getTime() - 30 * 86400_000);
   return { start, end, title: `Análise mensal — ${end.toISOString().slice(0, 7)}` };
@@ -38,57 +42,84 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     .order("generated_at", { ascending: false })
     .limit(priorLimit);
   // For weekly/monthly, also include the most recent broader report for narrative continuity
-  const { data: priorBroader } = kind === "daily"
-    ? { data: [] as typeof priorSameKind }
-    : await supabaseAdmin
-        .from("reports")
-        .select("kind, title, period_start, period_end, generated_at, markdown")
-        .eq("org_id", orgId)
-        .in("kind", kind === "weekly" ? ["monthly"] : ["weekly", "monthly"])
-        .lt("generated_at", end.toISOString())
-        .order("generated_at", { ascending: false })
-        .limit(2);
+  const { data: priorBroader } =
+    kind === "daily"
+      ? { data: [] as typeof priorSameKind }
+      : await supabaseAdmin
+          .from("reports")
+          .select("kind, title, period_start, period_end, generated_at, markdown")
+          .eq("org_id", orgId)
+          .in("kind", kind === "weekly" ? ["monthly"] : ["weekly", "monthly"])
+          .lt("generated_at", end.toISOString())
+          .order("generated_at", { ascending: false })
+          .limit(2);
 
-  const [{ data: org }, { data: analyses }, { data: alerts }, { data: vocab }, { data: signals }] = await Promise.all([
-    supabaseAdmin.from("organizations").select("name, city").eq("id", orgId).maybeSingle(),
-    supabaseAdmin
-      .from("message_analyses")
-      .select("topic, neighborhood, sentiment, risk_score, summary, mentioned_opponents, raw_messages!inner(id, content, posted_at, raw_payload, sources!inner(kind, label))")
-      .eq("org_id", orgId)
-      .gte("raw_messages.posted_at", start.toISOString())
-      .lte("raw_messages.posted_at", end.toISOString())
-      .limit(2000),
-    supabaseAdmin
-      .from("alerts")
-      .select("level, topic, neighborhood, summary, created_at")
-      .eq("org_id", orgId)
-      .gte("created_at", start.toISOString())
-      .lte("created_at", end.toISOString()),
-    supabaseAdmin
-      .from("org_vocabulary")
-      .select("kind, value")
-      .eq("org_id", orgId),
-    supabaseAdmin
-      .from("raw_messages")
-      .select("id, content, posted_at, raw_payload, sources!inner(kind, label), analysis:message_analyses(topic, neighborhood, sentiment, risk_score, summary)")
-      .eq("org_id", orgId)
-      .gte("posted_at", start.toISOString())
-      .lte("posted_at", end.toISOString())
-      .in("sources.kind", ["news", "instagram", "facebook", "x", "whatsapp"])
-      .order("posted_at", { ascending: false })
-      .limit(500),
-  ]);
+  const [{ data: org }, { data: analyses }, { data: alerts }, { data: vocab }, { data: signals }] =
+    await Promise.all([
+      supabaseAdmin.from("organizations").select("name, city").eq("id", orgId).maybeSingle(),
+      supabaseAdmin
+        .from("message_analyses")
+        .select(
+          "topic, neighborhood, sentiment, risk_score, summary, mentioned_opponents, raw_messages!inner(id, content, posted_at, raw_payload, sources!inner(kind, label))",
+        )
+        .eq("org_id", orgId)
+        .gte("raw_messages.posted_at", start.toISOString())
+        .lte("raw_messages.posted_at", end.toISOString())
+        .limit(2000),
+      supabaseAdmin
+        .from("alerts")
+        .select("level, topic, neighborhood, summary, created_at")
+        .eq("org_id", orgId)
+        .gte("created_at", start.toISOString())
+        .lte("created_at", end.toISOString()),
+      supabaseAdmin.from("org_vocabulary").select("kind, value").eq("org_id", orgId),
+      supabaseAdmin
+        .from("raw_messages")
+        .select(
+          "id, content, posted_at, raw_payload, sources!inner(kind, label), analysis:message_analyses(topic, neighborhood, sentiment, risk_score, summary)",
+        )
+        .eq("org_id", orgId)
+        .gte("posted_at", start.toISOString())
+        .lte("posted_at", end.toISOString())
+        .in("sources.kind", ["news", "instagram", "facebook", "x", "whatsapp"])
+        .order("posted_at", { ascending: false })
+        .limit(500),
+    ]);
 
   // Aggregate
   const topicCounts = new Map<
     string,
-    { count: number; sentSum: number; maxRisk: number; samples: Array<{ text: string; sentiment: number; risk: number; neighborhood: string | null; source: string; posted_at: string | null }> }
+    {
+      count: number;
+      sentSum: number;
+      maxRisk: number;
+      samples: Array<{
+        text: string;
+        sentiment: number;
+        risk: number;
+        neighborhood: string | null;
+        source: string;
+        posted_at: string | null;
+      }>;
+    }
   >();
-  const neighSent = new Map<string, { count: number; sentSum: number; topics: Map<string, number> }>();
+  const neighSent = new Map<
+    string,
+    { count: number; sentSum: number; topics: Map<string, number> }
+  >();
   const oppCounts = new Map<string, number>();
   const sourceCounts = new Map<string, number>();
   const sentimentTrend = new Map<string, { count: number; sentSum: number }>();
-  const highRiskMessages: Array<{ text: string; risk: number; sentiment: number; topic: string; neighborhood: string | null; source: string; posted_at: string | null; url: string | null }> = [];
+  const highRiskMessages: Array<{
+    text: string;
+    risk: number;
+    sentiment: number;
+    topic: string;
+    neighborhood: string | null;
+    source: string;
+    posted_at: string | null;
+    url: string | null;
+  }> = [];
   for (const a of analyses ?? []) {
     const raw = Array.isArray(a.raw_messages) ? a.raw_messages[0] : a.raw_messages;
     const sourceKind = raw?.sources?.kind ?? "desconhecida";
@@ -116,7 +147,11 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     }
     topicCounts.set(t, tc);
     if (a.neighborhood) {
-      const nc = neighSent.get(a.neighborhood) ?? { count: 0, sentSum: 0, topics: new Map<string, number>() };
+      const nc = neighSent.get(a.neighborhood) ?? {
+        count: 0,
+        sentSum: 0,
+        topics: new Map<string, number>(),
+      };
       nc.count += 1;
       nc.sentSum += Number(a.sentiment ?? 0);
       nc.topics.set(t, (nc.topics.get(t) ?? 0) + 1);
@@ -154,7 +189,10 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
       label,
       count: v.count,
       avg_sentiment: +(v.sentSum / v.count).toFixed(2),
-      top_topics: [...v.topics.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t, c]) => ({ label: t, count: c })),
+      top_topics: [...v.topics.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([t, c]) => ({ label: t, count: c })),
     }));
   const topOpponents = [...oppCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   const bySource = Object.fromEntries([...sourceCounts.entries()].sort((a, b) => b[1] - a[1]));
@@ -240,7 +278,12 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     prior_reports: priorReports,
   };
 
-  const kindLabel = kind === "daily" ? "diário (últimas 24h)" : kind === "weekly" ? "semanal (últimos 7 dias)" : "mensal (últimos 30 dias)";
+  const kindLabel =
+    kind === "daily"
+      ? "diário (últimas 24h)"
+      : kind === "weekly"
+        ? "semanal (últimos 7 dias)"
+        : "mensal (últimos 30 dias)";
 
   const aiResp = await callAi({
     model: MODEL_PRO,
@@ -250,7 +293,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
       {
         role: "system",
         content:
-          "Você é o analista-chefe de inteligência política de um gabinete municipal brasileiro. Escreve relatórios densos, jornalísticos e acionáveis em português do Brasil, em markdown limpo. Nunca inventa dados — só usa o que está no JSON fornecido. Cita trechos reais entre aspas quando ilustram um ponto. Prefere análise causal (\"por que isso está acontecendo\") a listas rasas. Sempre conecta sinais entre canais (WhatsApp × Instagram × imprensa) e nomeia bairros, temas e adversários quando presentes no vocabulário. Quando o JSON contém `prior_reports`, você DEVE ler esses relatórios anteriores e dialogar com eles: dizer o que evoluiu, o que se confirmou, o que arrefeceu, quais recomendações passadas foram atendidas ou ignoradas, e quais temas persistem. O relatório novo é um capítulo de uma série, não um documento isolado. Tom: sério, técnico, direto ao ponto — como um briefing de gabinete de campanha profissional.",
+          'Você é o analista-chefe de inteligência política de um gabinete municipal brasileiro. Escreve relatórios densos, jornalísticos e acionáveis em português do Brasil, em markdown limpo. Nunca inventa dados — só usa o que está no JSON fornecido. Cita trechos reais entre aspas quando ilustram um ponto. Prefere análise causal ("por que isso está acontecendo") a listas rasas. Sempre conecta sinais entre canais (WhatsApp × Instagram × imprensa) e nomeia bairros, temas e adversários quando presentes no vocabulário. Quando o JSON contém `prior_reports`, você DEVE ler esses relatórios anteriores e dialogar com eles: dizer o que evoluiu, o que se confirmou, o que arrefeceu, quais recomendações passadas foram atendidas ou ignoradas, e quais temas persistem. O relatório novo é um capítulo de uma série, não um documento isolado. Tom: sério, técnico, direto ao ponto — como um briefing de gabinete de campanha profissional.',
       },
       {
         role: "user",
@@ -341,4 +384,3 @@ ${JSON.stringify(promptData, null, 2)}
 
   return inserted.id;
 }
-

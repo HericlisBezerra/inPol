@@ -5,10 +5,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 export function isAuthorizedCron(request: Request): boolean {
-  const expected =
-    process.env.SUPABASE_PUBLISHABLE_KEY ??
-    process.env.SUPABASE_ANON_KEY ??
-    "";
+  const expected = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.SUPABASE_ANON_KEY ?? "";
   if (!expected) return false;
 
   const provided =

@@ -29,21 +29,40 @@ function ReportsLayout() {
         <div>
           <div className="label-mono">📄 Relatórios</div>
           <h1 className="font-display text-3xl mt-1">Sínteses geradas por IA 🤖</h1>
-          <p className="text-sm text-muted-foreground mt-1">Diário às 08h, semanal toda segunda, mensal todo dia 1º.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Diário às 08h, semanal toda segunda, mensal todo dia 1º.
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" disabled title="Geração manual temporariamente desativada">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled
+            title="Geração manual temporariamente desativada"
+          >
             ☀️ Gerar diário
           </Button>
-          <Button size="sm" variant="outline" disabled title="Geração manual temporariamente desativada">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled
+            title="Geração manual temporariamente desativada"
+          >
             📅 Semanal
           </Button>
-          <Button size="sm" variant="outline" disabled title="Geração manual temporariamente desativada">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled
+            title="Geração manual temporariamente desativada"
+          >
             📊 Mensal
           </Button>
         </div>
       </header>
-      <p className="text-xs text-muted-foreground -mt-4">⏸️ Geração manual temporariamente desativada. Os agendamentos automáticos continuam ativos.</p>
+      <p className="text-xs text-muted-foreground -mt-4">
+        ⏸️ Geração manual temporariamente desativada. Os agendamentos automáticos continuam ativos.
+      </p>
 
       <div className="space-y-2">
         {reports.length === 0 && (
@@ -52,16 +71,13 @@ function ReportsLayout() {
           </Card>
         )}
         {reports.map((r) => (
-          <Link
-            key={r.id}
-            to="/reports/$reportId"
-            params={{ reportId: r.id }}
-            className="block"
-          >
+          <Link key={r.id} to="/reports/$reportId" params={{ reportId: r.id }} className="block">
             <Card className="p-4 bg-surface hover:bg-surface-2 transition-colors">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl">{r.kind === "daily" ? "☀️" : r.kind === "weekly" ? "📅" : "📊"}</span>
+                  <span className="text-3xl">
+                    {r.kind === "daily" ? "☀️" : r.kind === "weekly" ? "📅" : "📊"}
+                  </span>
                   <div>
                     <div className="label-mono">{r.kind}</div>
                     <div className="font-medium mt-0.5">{r.title}</div>

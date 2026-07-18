@@ -22,8 +22,11 @@ export const Route = createFileRoute("/api/public/evolution/webhook/$token")({
         if (!instance) {
           return new Response(JSON.stringify({ error: "unknown_token" }), { status: 404 });
         }
-        const orgRow = Array.isArray(instance.organizations) ? instance.organizations[0] : instance.organizations;
-        const salt = (orgRow as { author_hash_salt: string } | null)?.author_hash_salt ?? "fallback-salt";
+        const orgRow = Array.isArray(instance.organizations)
+          ? instance.organizations[0]
+          : instance.organizations;
+        const salt =
+          (orgRow as { author_hash_salt: string } | null)?.author_hash_salt ?? "fallback-salt";
 
         let body: unknown;
         try {

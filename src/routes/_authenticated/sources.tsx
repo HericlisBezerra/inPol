@@ -48,9 +48,12 @@ function Sources() {
     <div className="p-8 space-y-6 max-w-7xl">
       <header>
         <div className="label-mono">📡 Fontes</div>
-        <h1 className="font-display text-3xl mt-1">Três frentes. <em className="text-primary not-italic">Um relatório.</em></h1>
+        <h1 className="font-display text-3xl mt-1">
+          Três frentes. <em className="text-primary not-italic">Um relatório.</em>
+        </h1>
         <p className="text-muted-foreground text-sm mt-2 max-w-2xl">
-          O Inpol monitora três territórios em paralelo. Cada fonte cadastrada é varrida automaticamente.
+          O Inpol monitora três territórios em paralelo. Cada fonte cadastrada é varrida
+          automaticamente.
         </p>
       </header>
 
@@ -64,17 +67,30 @@ function Sources() {
             </div>
           </div>
           <div className="space-y-3">
-            {wa.length === 0 && <div className="text-sm text-muted-foreground">Nenhum grupo monitorado. Vá em Grupos e ative os desejados.</div>}
+            {wa.length === 0 && (
+              <div className="text-sm text-muted-foreground">
+                Nenhum grupo monitorado. Vá em Grupos e ative os desejados.
+              </div>
+            )}
             {wa.slice(0, 10).map((g) => (
-              <div key={g.id} className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0">
+              <div
+                key={g.id}
+                className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0"
+              >
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{g.subject}</div>
-                  <div className="text-xs text-muted-foreground truncate">{g.participant_count ?? 0} membros</div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {g.participant_count ?? 0} membros
+                  </div>
                 </div>
-                <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/40 border">● ao vivo</Badge>
+                <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/40 border">
+                  ● ao vivo
+                </Badge>
               </div>
             ))}
-            {wa.length > 10 && <div className="text-xs text-muted-foreground">+ {wa.length - 10} grupos</div>}
+            {wa.length > 10 && (
+              <div className="text-xs text-muted-foreground">+ {wa.length - 10} grupos</div>
+            )}
           </div>
         </Card>
 
@@ -89,16 +105,26 @@ function Sources() {
           <div className="space-y-3">
             {social.length === 0 && (
               <div className="text-sm text-muted-foreground">
-                Nenhuma rede configurada. Adicione perfis no Vocabulário ou solicite ao administrador da plataforma.
+                Nenhuma rede configurada. Adicione perfis no Vocabulário ou solicite ao
+                administrador da plataforma.
               </div>
             )}
             {social.map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0">
+              <div
+                key={s.id}
+                className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0"
+              >
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{s.label}</div>
                   <div className="text-xs text-muted-foreground">{s.kind}</div>
                 </div>
-                <Badge className={s.is_active ? "bg-amber-500/20 text-amber-500 border-amber-500/40 border" : "border-border"}>
+                <Badge
+                  className={
+                    s.is_active
+                      ? "bg-amber-500/20 text-amber-500 border-amber-500/40 border"
+                      : "border-border"
+                  }
+                >
                   {s.is_active ? "◉ varredura" : "pausado"}
                 </Badge>
               </div>
@@ -117,16 +143,26 @@ function Sources() {
           <div className="space-y-3">
             {news.length === 0 && (
               <div className="text-sm text-muted-foreground">
-                Nenhuma fonte de imprensa cadastrada. Portais são varridos automaticamente a cada 2h assim que o administrador da plataforma habilitar.
+                Nenhuma fonte de imprensa cadastrada. Portais são varridos automaticamente a cada 2h
+                assim que o administrador da plataforma habilitar.
               </div>
             )}
             {news.map((s) => (
-              <div key={s.id} className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0">
+              <div
+                key={s.id}
+                className="flex items-center justify-between gap-2 border-b border-border pb-2 last:border-0"
+              >
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{s.label}</div>
                   <div className="text-xs text-muted-foreground">{s.kind}</div>
                 </div>
-                <Badge className={s.is_active ? "bg-amber-500/20 text-amber-500 border-amber-500/40 border" : "border-border"}>
+                <Badge
+                  className={
+                    s.is_active
+                      ? "bg-amber-500/20 text-amber-500 border-amber-500/40 border"
+                      : "border-border"
+                  }
+                >
                   {s.is_active ? "◉ varredura" : "pausado"}
                 </Badge>
               </div>

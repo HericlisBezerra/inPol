@@ -32,7 +32,11 @@ const LGPD_LABEL: Record<string, string> = {
   consent: "✅ Consentimento",
 };
 const KIND_LABEL: Record<string, string> = {
-  message: "mensagem", system: "sistema", group: "grupo", member: "pessoa", author: "titular",
+  message: "mensagem",
+  system: "sistema",
+  group: "grupo",
+  member: "pessoa",
+  author: "titular",
 };
 
 function Audit() {
@@ -64,14 +68,22 @@ function Audit() {
 
   const saveMut = useMutation({
     mutationFn: () =>
-      savePol({ data: { orgId: orgId!, retentionDays: retention, allowExport, dpoEmail: dpoEmail || null } }),
-    onSuccess: () => { toast.success("Política salva"); qc.invalidateQueries({ queryKey: ["lgpd-policy", orgId] }); },
+      savePol({
+        data: { orgId: orgId!, retentionDays: retention, allowExport, dpoEmail: dpoEmail || null },
+      }),
+    onSuccess: () => {
+      toast.success("Política salva");
+      qc.invalidateQueries({ queryKey: ["lgpd-policy", orgId] });
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
 
   const purgeMut = useMutation({
     mutationFn: () => purge({ data: { orgId: orgId! } }),
-    onSuccess: (r) => { toast.success(`Purga executada · ${r.deleted} mensagens removidas`); qc.invalidateQueries({ queryKey: ["lgpd", orgId] }); },
+    onSuccess: (r) => {
+      toast.success(`Purga executada · ${r.deleted} mensagens removidas`);
+      qc.invalidateQueries({ queryKey: ["lgpd", orgId] });
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
 
@@ -93,8 +105,15 @@ function Audit() {
 
   const exportCsv = () => {
     const header = ["created_at", "event_type", "subject_kind", "subject_id"];
-    const rows = lgpd.map((e) => [e.created_at, e.event_type, e.subject_kind ?? "", e.subject_id ?? ""]);
-    const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const rows = lgpd.map((e) => [
+      e.created_at,
+      e.event_type,
+      e.subject_kind ?? "",
+      e.subject_id ?? "",
+    ]);
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -121,23 +140,44 @@ function Audit() {
           <div className="space-y-3">
             <div>
               <Label>Retenção (dias)</Label>
-              <Input type="number" min={7} max={3650} value={retention} onChange={(e) => setRetention(Number(e.target.value))} />
-              <p className="text-xs text-muted-foreground mt-1">Mensagens mais antigas são deletadas pela purga mensal automática.</p>
+              <Input
+                type="number"
+                min={7}
+                max={3650}
+                value={retention}
+                onChange={(e) => setRetention(Number(e.target.value))}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Mensagens mais antigas são deletadas pela purga mensal automática.
+              </p>
             </div>
             <div className="flex items-center justify-between">
               <div>
                 <Label>Permitir exportação por titular</Label>
-                <p className="text-xs text-muted-foreground">Habilita download dos dados de um autor específico.</p>
+                <p className="text-xs text-muted-foreground">
+                  Habilita download dos dados de um autor específico.
+                </p>
               </div>
               <Switch checked={allowExport} onCheckedChange={setAllowExport} />
             </div>
             <div>
               <Label>E-mail do DPO</Label>
-              <Input type="email" value={dpoEmail} onChange={(e) => setDpoEmail(e.target.value)} placeholder="dpo@..." />
+              <Input
+                type="email"
+                value={dpoEmail}
+                onChange={(e) => setDpoEmail(e.target.value)}
+                placeholder="dpo@..."
+              />
             </div>
             <div className="flex gap-2 pt-2">
-              <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>Salvar política</Button>
-              <Button variant="outline" disabled={purgeMut.isPending} onClick={() => confirm("Executar purga agora?") && purgeMut.mutate()}>
+              <Button disabled={saveMut.isPending} onClick={() => saveMut.mutate()}>
+                Salvar política
+              </Button>
+              <Button
+                variant="outline"
+                disabled={purgeMut.isPending}
+                onClick={() => confirm("Executar purga agora?") && purgeMut.mutate()}
+              >
                 <Trash2 className="size-4 mr-1" /> Purgar agora
               </Button>
             </div>
@@ -148,14 +188,31 @@ function Audit() {
           <h3 className="font-display text-lg mb-3">Filtros e export</h3>
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => setFilter("")} className={`px-3 py-1 rounded border text-xs ${filter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}>todos</button>
+              <button
+                onClick={() => setFilter("")}
+                className={`px-3 py-1 rounded border text-xs ${filter === "" ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}
+              >
+                todos
+              </button>
               {Object.entries(LGPD_LABEL).map(([k, v]) => (
-                <button key={k} onClick={() => setFilter(k)} className={`px-3 py-1 rounded border text-xs ${filter === k ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}>{v}</button>
+                <button
+                  key={k}
+                  onClick={() => setFilter(k)}
+                  className={`px-3 py-1 rounded border text-xs ${filter === k ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}
+                >
+                  {v}
+                </button>
               ))}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={exportCsv}><Download className="size-4 mr-1" /> Exportar CSV</Button>
-              <Button variant="outline" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ["lgpd", orgId, filter] })}>
+              <Button variant="outline" size="sm" onClick={exportCsv}>
+                <Download className="size-4 mr-1" /> Exportar CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => qc.invalidateQueries({ queryKey: ["lgpd", orgId, filter] })}
+              >
                 <RefreshCw className="size-4 mr-1" /> Recarregar
               </Button>
             </div>
@@ -169,7 +226,9 @@ function Audit() {
           {lgpd.map((e) => (
             <div key={e.id} className="text-sm border-b border-border pb-2 last:border-0">
               <div className="flex items-center justify-between">
-                <Badge variant="outline" className="font-mono text-xs">{LGPD_LABEL[e.event_type] ?? e.event_type}</Badge>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {LGPD_LABEL[e.event_type] ?? e.event_type}
+                </Badge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {new Date(e.created_at).toLocaleString("pt-BR")}
                 </span>
@@ -180,7 +239,9 @@ function Audit() {
             </div>
           ))}
           {lgpd.length === 0 && (
-            <div className="text-sm text-muted-foreground text-center py-8">Nenhum evento no filtro atual.</div>
+            <div className="text-sm text-muted-foreground text-center py-8">
+              Nenhum evento no filtro atual.
+            </div>
           )}
         </div>
       </Card>

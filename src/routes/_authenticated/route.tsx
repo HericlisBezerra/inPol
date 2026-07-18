@@ -163,7 +163,6 @@ function AuthLayout() {
               setOrgId(v);
               if (pathname === "/onboarding") navigate({ to: "/dashboard" });
             }}
-
           >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione organização" />
@@ -193,7 +192,6 @@ function AuthLayout() {
             </SelectContent>
           </Select>
         </div>
-
 
         <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
           {NAV.map((item) => {

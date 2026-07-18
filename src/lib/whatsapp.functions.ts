@@ -148,7 +148,6 @@ export const refreshGroups = createServerFn({ method: "POST" })
     });
     if (!ok) throw new Error("Sem permissão");
 
-
     const { data: inst, error } = await supabaseAdmin
       .from("whatsapp_instances")
       .select("id, org_id, instance_name, evolution_base_url, evolution_api_key")
@@ -157,7 +156,11 @@ export const refreshGroups = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error || !inst) throw new Error("Instância não encontrada");
 
-    const groups = await fetchGroups(inst.evolution_base_url, inst.evolution_api_key, inst.instance_name);
+    const groups = await fetchGroups(
+      inst.evolution_base_url,
+      inst.evolution_api_key,
+      inst.instance_name,
+    );
 
     if (groups.length === 0) return { synced: 0 };
 
@@ -268,8 +271,7 @@ export const getInstanceStatus = createServerFn({ method: "POST" })
         inst.evolution_api_key,
         inst.instance_name,
       )) as { instance?: { state?: string }; state?: string };
-      const state =
-        raw?.instance?.state ?? raw?.state ?? "unknown";
+      const state = raw?.instance?.state ?? raw?.state ?? "unknown";
       await supabaseAdmin
         .from("whatsapp_instances")
         .update({ connection_status: state, last_seen_at: new Date().toISOString() })

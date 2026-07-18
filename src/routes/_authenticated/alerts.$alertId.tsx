@@ -12,18 +12,45 @@ export const Route = createFileRoute("/_authenticated/alerts/$alertId")({
 });
 
 const TIMELINE_BAD = [
-  { day: "Seg · manhã", text: "3 reclamações sobre agendamento em um grupo da zona oeste. Assessor lê de relance. Acha pontual." },
-  { day: "Ter", text: "Mais 5 reclamações em 2 grupos diferentes. Comentário ácido em matéria do Bom Dia Jundiaí. Ninguém alerta o prefeito." },
-  { day: "Qua", text: "Vereador de oposição compartilha os prints no Instagram. 200 compartilhamentos em 6h." },
+  {
+    day: "Seg · manhã",
+    text: "3 reclamações sobre agendamento em um grupo da zona oeste. Assessor lê de relance. Acha pontual.",
+  },
+  {
+    day: "Ter",
+    text: "Mais 5 reclamações em 2 grupos diferentes. Comentário ácido em matéria do Bom Dia Jundiaí. Ninguém alerta o prefeito.",
+  },
+  {
+    day: "Qua",
+    text: "Vereador de oposição compartilha os prints no Instagram. 200 compartilhamentos em 6h.",
+  },
   { day: "Qui · noite", text: "A Tribuna de Jundiaí liga pedindo posicionamento oficial." },
-  { day: "Sex", text: "Manchete: \"Moradores reclamam de fila na UBS Maringá; prefeitura promete resposta\"" },
+  {
+    day: "Sex",
+    text: 'Manchete: "Moradores reclamam de fila na UBS Maringá; prefeitura promete resposta"',
+  },
 ];
 const TIMELINE_GOOD = [
-  { day: "Seg · 14h", text: "Alerta laranja no relatório: tema em 3 grupos + 22 comentários negativos em portais. Estágio: borbulhando." },
-  { day: "Ter · manhã", text: "Prefeito reúne secretário de saúde. Identifica que o agendamento estava com problema técnico há 9 dias." },
-  { day: "Qua · manhã", text: "Visita oficial à UBS com câmera. Equipe documenta solução em andamento." },
-  { day: "Qui · 10h", text: "Publicação no Instagram da gestão: \"Estive na UBS Maringá, ouvi os moradores, contratamos reforço.\"" },
-  { day: "Sex", text: "Manchete: \"Prefeito vai à UBS Maringá e anuncia reforço; moradores comemoram\"" },
+  {
+    day: "Seg · 14h",
+    text: "Alerta laranja no relatório: tema em 3 grupos + 22 comentários negativos em portais. Estágio: borbulhando.",
+  },
+  {
+    day: "Ter · manhã",
+    text: "Prefeito reúne secretário de saúde. Identifica que o agendamento estava com problema técnico há 9 dias.",
+  },
+  {
+    day: "Qua · manhã",
+    text: "Visita oficial à UBS com câmera. Equipe documenta solução em andamento.",
+  },
+  {
+    day: "Qui · 10h",
+    text: 'Publicação no Instagram da gestão: "Estive na UBS Maringá, ouvi os moradores, contratamos reforço."',
+  },
+  {
+    day: "Sex",
+    text: 'Manchete: "Prefeito vai à UBS Maringá e anuncia reforço; moradores comemoram"',
+  },
 ];
 
 function AlertDetail() {
@@ -43,7 +70,10 @@ function AlertDetail() {
 
   return (
     <div className="p-8 space-y-6 max-w-6xl">
-      <Link to="/alerts" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+      <Link
+        to="/alerts"
+        className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+      >
         <ChevronLeft className="size-4" /> Voltar para alertas
       </Link>
 
@@ -103,7 +133,8 @@ function AlertDetail() {
               ))}
             </div>
             <div className="mt-4 pt-4 border-t border-border text-sm text-primary">
-              Gabinete antecipou. Manchete positiva. <b>Mesma cidade, mesma semana, manchete invertida.</b>
+              Gabinete antecipou. Manchete positiva.{" "}
+              <b>Mesma cidade, mesma semana, manchete invertida.</b>
             </div>
           </Card>
         </div>

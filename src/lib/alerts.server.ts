@@ -31,8 +31,7 @@ function stageOf(b: Bucket): Stage {
 }
 
 function levelOf(b: Bucket): Level {
-  const avgSent =
-    b.sentiments.reduce((a, c) => a + c, 0) / Math.max(1, b.sentiments.length);
+  const avgSent = b.sentiments.reduce((a, c) => a + c, 0) / Math.max(1, b.sentiments.length);
   const maxRisk = b.risks.reduce((a, c) => Math.max(a, c), 0);
   if (b.hasPressOrSocial || (maxRisk >= 70 && avgSent < -0.3)) return "vermelho";
   if (maxRisk >= 55 || avgSent < -0.4) return "laranja";
@@ -48,7 +47,7 @@ async function generateAction(bucket: Bucket): Promise<string> {
     const prompt = [
       "Você é um consultor político experiente. Com base nas mensagens abaixo,",
       "sugira UMA ação concreta e imediata (máx 160 caracteres) para o gabinete,",
-      "no formato de instrução direta. Responda em JSON: {\"action\": \"...\"}.",
+      'no formato de instrução direta. Responda em JSON: {"action": "..."}.',
       "",
       `Tema: ${bucket.topic}`,
       `Bairro: ${bucket.neighborhood ?? "geral"}`,
@@ -132,7 +131,13 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
     if (typeof r.risk_score === "number") b.risks.push(r.risk_score);
     const kind = r.raw_messages?.sources?.kind;
     if (kind) b.sourceCounts[kind] = (b.sourceCounts[kind] ?? 0) + 1;
-    if (kind === "news" || kind === "instagram" || kind === "facebook" || kind === "x" || kind === "web_search") {
+    if (
+      kind === "news" ||
+      kind === "instagram" ||
+      kind === "facebook" ||
+      kind === "x" ||
+      kind === "web_search"
+    ) {
       b.hasPressOrSocial = true;
     }
     const ts = r.raw_messages?.posted_at;
@@ -151,8 +156,7 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
 
     const stage = stageOf(b);
     const level = levelOf(b);
-    const avgSent =
-      b.sentiments.reduce((a, c) => a + c, 0) / Math.max(1, b.sentiments.length);
+    const avgSent = b.sentiments.reduce((a, c) => a + c, 0) / Math.max(1, b.sentiments.length);
     const maxRisk = b.risks.reduce((a, c) => Math.max(a, c), 0);
 
     // Look for existing OPEN alert with same dedupe key
@@ -164,8 +168,7 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
       .is("resolved_at", null)
       .maybeSingle();
 
-    const action =
-      existing?.recommended_action ?? (await generateAction(b));
+    const action = existing?.recommended_action ?? (await generateAction(b));
 
     const sources = Object.entries(b.sourceCounts)
       .sort((a, b2) => b2[1] - a[1])
@@ -214,7 +217,8 @@ export async function detectAlertsAllOrgs(): Promise<
     .eq("is_demo", false);
   if (error) throw new Error(error.message);
 
-  const results: Array<{ org_id: string; scanned?: number; upserted?: number; error?: string }> = [];
+  const results: Array<{ org_id: string; scanned?: number; upserted?: number; error?: string }> =
+    [];
   for (const o of orgs ?? []) {
     try {
       const r = await detectAlertsForOrg(o.id);

@@ -63,9 +63,8 @@ export const getDashboard = createServerFn({ method: "GET" })
     ]);
 
     // KPIs derived
-    const coverage = totalGroups && totalGroups > 0
-      ? Math.round(((monitored ?? 0) / totalGroups) * 100)
-      : 0;
+    const coverage =
+      totalGroups && totalGroups > 0 ? Math.round(((monitored ?? 0) / totalGroups) * 100) : 0;
     // Rough: assume 6s per analyzed message saved from a human analyst.
     const hoursSaved = ((analyzed7 ?? 0) * 6) / 3600 / 7;
 

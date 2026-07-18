@@ -69,7 +69,11 @@ Se não souber de fato, retorne {"results":[]}. Não invente URLs.`;
       const { text } = await callAi({
         model: MODEL_FLASH,
         messages: [
-          { role: "system", content: "Você é um buscador de imprensa. Use apenas conhecimento factual; nunca invente URLs ou notícias." },
+          {
+            role: "system",
+            content:
+              "Você é um buscador de imprensa. Use apenas conhecimento factual; nunca invente URLs ou notícias.",
+          },
           { role: "user", content: prompt },
         ],
         jsonObject: true,

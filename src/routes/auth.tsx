@@ -34,7 +34,9 @@ function AuthPage() {
       if (error) throw error;
       navigate({ to: "/dashboard" });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Falha no login. Acesso é apenas por convite.");
+      toast.error(
+        err instanceof Error ? err.message : "Falha no login. Acesso é apenas por convite.",
+      );
     } finally {
       setLoading(false);
     }

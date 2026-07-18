@@ -79,14 +79,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Inpol — Inteligência Política" },
-      { name: "description", content: "Plataforma de inteligência política em tempo real para gabinetes municipais." },
+      {
+        name: "description",
+        content: "Plataforma de inteligência política em tempo real para gabinetes municipais.",
+      },
       { name: "author", content: "Inpol" },
       { property: "og:title", content: "Inpol — Inteligência Política" },
-      { property: "og:description", content: "Plataforma de inteligência política em tempo real para gabinetes municipais." },
+      {
+        property: "og:description",
+        content: "Plataforma de inteligência política em tempo real para gabinetes municipais.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Inpol — Inteligência Política" },
-      { name: "twitter:description", content: "Plataforma de inteligência política em tempo real para gabinetes municipais." },
+      {
+        name: "twitter:description",
+        content: "Plataforma de inteligência política em tempo real para gabinetes municipais.",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

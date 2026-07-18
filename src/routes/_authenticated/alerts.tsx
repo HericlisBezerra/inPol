@@ -76,7 +76,8 @@ function Alerts() {
           <div className="label-mono">🚨 Alertas</div>
           <h1 className="font-display text-3xl mt-1">Crises detectadas antes da imprensa 📰</h1>
           <p className="text-muted-foreground text-sm mt-2 max-w-2xl">
-            Cada tema tóxico recebe alerta classificado por estágio. Clique para ver o roteiro de ação.
+            Cada tema tóxico recebe alerta classificado por estágio. Clique para ver o roteiro de
+            ação.
           </p>
         </div>
         <Button
@@ -112,7 +113,9 @@ function Alerts() {
                     <p className="text-sm text-muted-foreground mt-1">{a.summary}</p>
                     <div className="flex items-center gap-3 mt-2 text-xs">
                       <span className="text-muted-foreground">Estágio:</span>
-                      <span className="font-mono">{s.emoji} {s.label}</span>
+                      <span className="font-mono">
+                        {s.emoji} {s.label}
+                      </span>
                       <span className="text-muted-foreground">·</span>
                       <span className="font-mono text-primary">⏱️ janela: {s.eta}</span>
                     </div>

@@ -94,8 +94,8 @@ function Onboarding() {
     <div className="max-w-xl mx-auto p-8">
       <h1 className="font-display text-3xl mb-2">Bem-vindo ao Inpol</h1>
       <p className="text-muted-foreground mb-6">
-        Crie sua organização para começar a monitorar grupos de WhatsApp e gerar
-        relatórios de inteligência política.
+        Crie sua organização para começar a monitorar grupos de WhatsApp e gerar relatórios de
+        inteligência política.
       </p>
 
       <Card className="p-5 mb-6 bg-gradient-to-br from-primary/10 to-transparent border-primary/30">
@@ -104,7 +104,8 @@ function Onboarding() {
           <div className="flex-1">
             <h3 className="font-display text-lg">Quer ver o Inpol em ação primeiro?</h3>
             <p className="text-sm text-muted-foreground mt-1 mb-3">
-              Entre no modo demonstração com a organização <b>Prefeitura de Jundiaí</b> populada com 90 dias de dados fictícios — grupos, alertas, mapa, adversários e relatórios.
+              Entre no modo demonstração com a organização <b>Prefeitura de Jundiaí</b> populada com
+              90 dias de dados fictícios — grupos, alertas, mapa, adversários e relatórios.
             </p>
             <Button onClick={() => demoMut.mutate()} disabled={demoMut.isPending}>
               {demoMut.isPending ? "Preparando demo..." : "Entrar no Modo Demo"}
@@ -132,8 +133,8 @@ function Onboarding() {
                   {state
                     ? `${state} — ${ufs.find((u) => u.sigla === state)?.nome ?? ""}`
                     : ufQuery.isLoading
-                    ? "Carregando..."
-                    : "Selecione"}
+                      ? "Carregando..."
+                      : "Selecione"}
                   <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
                 </Button>
               </PopoverTrigger>
@@ -182,8 +183,8 @@ function Onboarding() {
                     (!state
                       ? "Selecione a UF primeiro"
                       : cityQuery.isLoading
-                      ? "Carregando..."
-                      : "Selecione a cidade")}
+                        ? "Carregando..."
+                        : "Selecione a cidade")}
                   <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50 shrink-0" />
                 </Button>
               </PopoverTrigger>

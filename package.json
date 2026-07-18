@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "deploy": "vite build && wrangler deploy",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:smoke": "bun scripts/smoke-v2.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -8,8 +8,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { upsertMember, deleteMember } from "@/lib/people.functions";
@@ -20,7 +33,13 @@ export const Route = createFileRoute("/_authenticated/people")({
   component: People,
 });
 
-type Member = { id: string; display_name: string; role: string; neighborhood: string | null; tags: string[] };
+type Member = {
+  id: string;
+  display_name: string;
+  role: string;
+  neighborhood: string | null;
+  tags: string[];
+};
 
 function People() {
   const { orgId } = useCurrentOrg();
@@ -84,13 +103,22 @@ function People() {
     },
   });
 
-  const agg = new Map<string, { msgs: number; sent: number; sentN: number; insults: number; resp: number; respN: number }>();
+  const agg = new Map<
+    string,
+    { msgs: number; sent: number; sentN: number; insults: number; resp: number; respN: number }
+  >();
   stats.forEach((s) => {
     const a = agg.get(s.member_id) ?? { msgs: 0, sent: 0, sentN: 0, insults: 0, resp: 0, respN: 0 };
     a.msgs += s.message_count ?? 0;
-    if (s.avg_sentiment != null) { a.sent += Number(s.avg_sentiment); a.sentN++; }
+    if (s.avg_sentiment != null) {
+      a.sent += Number(s.avg_sentiment);
+      a.sentN++;
+    }
     a.insults += s.insults_count ?? 0;
-    if (s.avg_response_minutes != null) { a.resp += Number(s.avg_response_minutes); a.respN++; }
+    if (s.avg_response_minutes != null) {
+      a.resp += Number(s.avg_response_minutes);
+      a.respN++;
+    }
     agg.set(s.member_id, a);
   });
 
@@ -101,10 +129,16 @@ function People() {
           <div className="label-mono">👥 Pessoas monitoradas</div>
           <h1 className="font-display text-3xl mt-1">Lideranças e militantes 🎯</h1>
           <p className="text-muted-foreground text-sm mt-2 max-w-2xl">
-            Cadastre pessoas relevantes (líderes de bairro, vereadores, militantes) e acompanhe volume/sentimento/xingamentos individuais.
+            Cadastre pessoas relevantes (líderes de bairro, vereadores, militantes) e acompanhe
+            volume/sentimento/xingamentos individuais.
           </p>
         </div>
-        <Button onClick={() => { setEditing(null); setOpen(true); }}>
+        <Button
+          onClick={() => {
+            setEditing(null);
+            setOpen(true);
+          }}
+        >
           <Plus className="size-4 mr-1" /> Nova pessoa
         </Button>
       </header>
@@ -133,18 +167,39 @@ function People() {
                   <TableCell className="text-muted-foreground">{m.role}</TableCell>
                   <TableCell className="text-muted-foreground">{m.neighborhood ?? "—"}</TableCell>
                   <TableCell className="text-right font-mono">{a?.msgs ?? 0}</TableCell>
-                  <TableCell className={`text-right font-mono ${sent >= 0 ? "text-emerald-500" : "text-destructive"}`}>{sent.toFixed(2)}</TableCell>
+                  <TableCell
+                    className={`text-right font-mono ${sent >= 0 ? "text-emerald-500" : "text-destructive"}`}
+                  >
+                    {sent.toFixed(2)}
+                  </TableCell>
                   <TableCell className="text-right font-mono">{a?.insults ?? 0}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {(m.tags ?? []).map((t) => <Badge key={t} variant="secondary" className="text-xs">{t}</Badge>)}
+                      {(m.tags ?? []).map((t) => (
+                        <Badge key={t} variant="secondary" className="text-xs">
+                          {t}
+                        </Badge>
+                      ))}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => { setEditing(m); setOpen(true); }}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditing(m);
+                        setOpen(true);
+                      }}
+                    >
                       <Pencil className="size-3" />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => confirm(`Remover ${m.display_name}?`) && deleteMut.mutate(m.id)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        confirm(`Remover ${m.display_name}?`) && deleteMut.mutate(m.id)
+                      }
+                    >
                       <Trash2 className="size-3 text-destructive" />
                     </Button>
                   </TableCell>
@@ -152,7 +207,11 @@ function People() {
               );
             })}
             {members.length === 0 && (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma pessoa cadastrada.</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                  Nenhuma pessoa cadastrada.
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>
@@ -170,12 +229,22 @@ function People() {
 }
 
 function MemberDialog({
-  open, onOpenChange, initial, onSubmit, pending,
+  open,
+  onOpenChange,
+  initial,
+  onSubmit,
+  pending,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial: Member | null;
-  onSubmit: (v: { id?: string; displayName: string; role: string; neighborhood: string | null; tags: string[] }) => void;
+  onSubmit: (v: {
+    id?: string;
+    displayName: string;
+    role: string;
+    neighborhood: string | null;
+    tags: string[];
+  }) => void;
   pending: boolean;
 }) {
   const [name, setName] = useState(initial?.display_name ?? "");
@@ -183,16 +252,43 @@ function MemberDialog({
   const [neighborhood, setNeighborhood] = useState(initial?.neighborhood ?? "");
   const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
   return (
-    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (o) { setName(initial?.display_name ?? ""); setRole(initial?.role ?? "lider_bairro"); setNeighborhood(initial?.neighborhood ?? ""); setTags((initial?.tags ?? []).join(", ")); } }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (o) {
+          setName(initial?.display_name ?? "");
+          setRole(initial?.role ?? "lider_bairro");
+          setNeighborhood(initial?.neighborhood ?? "");
+          setTags((initial?.tags ?? []).join(", "));
+        }
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{initial ? "Editar pessoa" : "Nova pessoa"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-          <div><Label>Papel</Label><Input value={role} onChange={(e) => setRole(e.target.value)} placeholder="lider_bairro, vereador, militante..." /></div>
-          <div><Label>Bairro</Label><Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} /></div>
-          <div><Label>Tags (separadas por vírgula)</Label><Input value={tags} onChange={(e) => setTags(e.target.value)} /></div>
+          <div>
+            <Label>Nome</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <Label>Papel</Label>
+            <Input
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              placeholder="lider_bairro, vereador, militante..."
+            />
+          </div>
+          <div>
+            <Label>Bairro</Label>
+            <Input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} />
+          </div>
+          <div>
+            <Label>Tags (separadas por vírgula)</Label>
+            <Input value={tags} onChange={(e) => setTags(e.target.value)} />
+          </div>
         </div>
         <DialogFooter>
           <Button
@@ -203,7 +299,10 @@ function MemberDialog({
                 displayName: name.trim(),
                 role: role.trim(),
                 neighborhood: neighborhood.trim() || null,
-                tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+                tags: tags
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean),
               })
             }
           >

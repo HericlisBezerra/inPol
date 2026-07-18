@@ -2,7 +2,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-const vocabKinds = ["neighborhood", "opponent", "ally", "department", "facility", "sensitive_term", "news_domain", "focus_term"] as const;
+const vocabKinds = [
+  "neighborhood",
+  "opponent",
+  "ally",
+  "department",
+  "facility",
+  "sensitive_term",
+  "news_domain",
+  "focus_term",
+] as const;
 
 export const listVocabulary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

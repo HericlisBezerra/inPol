@@ -13,7 +13,15 @@ export const getMyOrgs = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return (data ?? []).map((row) => ({
       role: row.role,
-      org: row.org as { id: string; name: string; city: string | null; state: string | null; slug: string | null; is_demo: boolean; created_at: string },
+      org: row.org as {
+        id: string;
+        name: string;
+        city: string | null;
+        state: string | null;
+        slug: string | null;
+        is_demo: boolean;
+        created_at: string;
+      },
     }));
   });
 
@@ -86,9 +94,17 @@ export const createOrg = createServerFn({ method: "POST" })
 
     // Seed default vocabulary for Brazilian municipal gabinete
     const seeds = [
-      ...["saude", "educacao", "transporte", "obras", "seguranca", "limpeza", "habitacao", "cultura", "esporte"].map(
-        (v) => ({ org_id: org.id, kind: "department" as const, value: v }),
-      ),
+      ...[
+        "saude",
+        "educacao",
+        "transporte",
+        "obras",
+        "seguranca",
+        "limpeza",
+        "habitacao",
+        "cultura",
+        "esporte",
+      ].map((v) => ({ org_id: org.id, kind: "department" as const, value: v })),
       { org_id: org.id, kind: "news_domain" as const, value: "tribunadejundiai.com.br" },
       { org_id: org.id, kind: "news_domain" as const, value: "bomdiajundiai.com.br" },
       { org_id: org.id, kind: "news_domain" as const, value: "g1.globo.com/sp/sorocaba-jundiai" },

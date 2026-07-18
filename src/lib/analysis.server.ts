@@ -61,7 +61,9 @@ export async function analyzeBatch(
 
   const vocabBlock = JSON.stringify(vocab, null, 2);
   const msgsBlock = messages
-    .map((m, i) => `#${i} [id=${m.id}] grupo="${m.group_label ?? "?"}":\n${m.content.slice(0, 800)}`)
+    .map(
+      (m, i) => `#${i} [id=${m.id}] grupo="${m.group_label ?? "?"}":\n${m.content.slice(0, 800)}`,
+    )
     .join("\n---\n");
 
   const userPrompt = `VOCABULÁRIO DA ORGANIZAÇÃO:

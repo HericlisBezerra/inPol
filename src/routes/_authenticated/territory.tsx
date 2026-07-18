@@ -47,7 +47,8 @@ function Territory() {
           <div className="label-mono">🗺️ Território</div>
           <h1 className="font-display text-3xl mt-1">Mapa de aprovação por bairro</h1>
           <p className="text-muted-foreground text-sm mt-2 max-w-2xl">
-            Sentimento agregado dos últimos {days} dias por bairro mencionado nas mensagens analisadas.
+            Sentimento agregado dos últimos {days} dias por bairro mencionado nas mensagens
+            analisadas.
           </p>
         </div>
         <div className="flex gap-1 text-xs">
@@ -66,7 +67,8 @@ function Territory() {
       {isLoading && <div className="text-muted-foreground">Carregando…</div>}
       {!isLoading && items.length === 0 && (
         <Card className="p-6 bg-surface text-sm text-muted-foreground">
-          Ainda sem mensagens com bairro classificado. Cadastre bairros no Vocabulário (Ajustes) e aguarde novas análises.
+          Ainda sem mensagens com bairro classificado. Cadastre bairros no Vocabulário (Ajustes) e
+          aguarde novas análises.
         </Card>
       )}
 
@@ -76,17 +78,24 @@ function Territory() {
             <h3 className="font-display text-lg mb-3">🏆 Ranking</h3>
             <div className="space-y-2">
               {items.map((b, i) => (
-                <div key={b.name} className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0">
+                <div
+                  key={b.name}
+                  className="flex items-center justify-between text-sm border-b border-border pb-2 last:border-0"
+                >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-xs text-muted-foreground font-mono w-6">#{i + 1}</span>
                     <div className="min-w-0">
                       <div className="font-medium truncate">{b.name}</div>
                       <div className="text-xs text-muted-foreground font-mono inline-flex items-center gap-1">
-                        <MapPin className="size-3" /> {b.msgs} msgs · {emojiFor(b.sentiment)} {b.sentiment.toFixed(2)}
+                        <MapPin className="size-3" /> {b.msgs} msgs · {emojiFor(b.sentiment)}{" "}
+                        {b.sentiment.toFixed(2)}
                       </div>
                     </div>
                   </div>
-                  <Badge variant={b.sentiment >= 0 ? "default" : "destructive"} className="font-mono">
+                  <Badge
+                    variant={b.sentiment >= 0 ? "default" : "destructive"}
+                    className="font-mono"
+                  >
                     {b.approval}%
                   </Badge>
                 </div>
@@ -124,4 +133,3 @@ function Territory() {
     </div>
   );
 }
-

@@ -101,7 +101,10 @@ export async function backfillInstance(
       totalInserted += res.inserted;
       totalSkipped += res.skipped;
     } catch (e) {
-      errors.push({ group: g.subject ?? g.remote_jid, error: e instanceof Error ? e.message : String(e) });
+      errors.push({
+        group: g.subject ?? g.remote_jid,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 

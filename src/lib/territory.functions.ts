@@ -10,7 +10,9 @@ import { z } from "zod";
 export const getTerritoryStats = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
-    z.object({ orgId: z.string().uuid(), days: z.number().int().min(1).max(180).default(30) }).parse(d),
+    z
+      .object({ orgId: z.string().uuid(), days: z.number().int().min(1).max(180).default(30) })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { data: ok } = await context.supabase.rpc("has_org_access", {
