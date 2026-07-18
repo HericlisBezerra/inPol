@@ -19,7 +19,7 @@ const ROUTES = [
   ["/v2/rede", "Adversários"],
   ["/v2/camara", "Câmara"],
   ["/v2/camara/joao-parimoschi", "Parimoschi"],
-  ["/v2/modo-eleicao", "Eleição"],
+  ["/v2-eleicao", "Eleição"],
   ["/v2/ajustes", "Ajustes"],
   ["/v2/ajustes/equipe", "Equipe"],
   ["/v2/ajustes/whatsapp", "WhatsApp"],

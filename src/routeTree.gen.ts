@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as V2EleicaoRouteImport } from './routes/v2-eleicao'
 import { Route as V2AdminRouteImport } from './routes/v2-admin'
 import { Route as SairRouteImport } from './routes/sair'
 import { Route as EntrarRouteImport } from './routes/entrar'
@@ -24,7 +25,6 @@ import { Route as V2TerritorioRouteImport } from './routes/v2/territorio'
 import { Route as V2SinaisRouteImport } from './routes/v2/sinais'
 import { Route as V2RelatoriosRouteImport } from './routes/v2/relatorios'
 import { Route as V2RedeRouteImport } from './routes/v2/rede'
-import { Route as V2ModoEleicaoRouteImport } from './routes/v2/modo-eleicao'
 import { Route as V2CamaraRouteImport } from './routes/v2/camara'
 import { Route as V2AlertasRouteImport } from './routes/v2/alertas'
 import { Route as SiteTermosRouteImport } from './routes/site/termos'
@@ -70,6 +70,11 @@ import { Route as ApiPublicHooksBackfillWhatsappRouteImport } from './routes/api
 import { Route as ApiPublicHooksAnalyzePendingRouteImport } from './routes/api/public/hooks/analyze-pending'
 import { Route as ApiPublicEvolutionWebhookTokenRouteImport } from './routes/api/public/evolution.webhook.$token'
 
+const V2EleicaoRoute = V2EleicaoRouteImport.update({
+  id: '/v2-eleicao',
+  path: '/v2-eleicao',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const V2AdminRoute = V2AdminRouteImport.update({
   id: '/v2-admin',
   path: '/v2-admin',
@@ -142,11 +147,6 @@ const V2RelatoriosRoute = V2RelatoriosRouteImport.update({
 const V2RedeRoute = V2RedeRouteImport.update({
   id: '/rede',
   path: '/rede',
-  getParentRoute: () => V2RouteRoute,
-} as any)
-const V2ModoEleicaoRoute = V2ModoEleicaoRouteImport.update({
-  id: '/modo-eleicao',
-  path: '/modo-eleicao',
   getParentRoute: () => V2RouteRoute,
 } as any)
 const V2CamaraRoute = V2CamaraRouteImport.update({
@@ -389,6 +389,7 @@ export interface FileRoutesByFullPath {
   '/entrar': typeof EntrarRoute
   '/sair': typeof SairRoute
   '/v2-admin': typeof V2AdminRoute
+  '/v2-eleicao': typeof V2EleicaoRoute
   '/v2/ajustes': typeof V2AjustesRouteRouteWithChildren
   '/admin': typeof AuthenticatedAdminRoute
   '/adversaries': typeof AuthenticatedAdversariesRoute
@@ -409,7 +410,6 @@ export interface FileRoutesByFullPath {
   '/site/termos': typeof SiteTermosRoute
   '/v2/alertas': typeof V2AlertasRouteWithChildren
   '/v2/camara': typeof V2CamaraRouteWithChildren
-  '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
   '/v2/rede': typeof V2RedeRoute
   '/v2/relatorios': typeof V2RelatoriosRouteWithChildren
   '/v2/sinais': typeof V2SinaisRoute
@@ -448,6 +448,7 @@ export interface FileRoutesByTo {
   '/entrar': typeof EntrarRoute
   '/sair': typeof SairRoute
   '/v2-admin': typeof V2AdminRoute
+  '/v2-eleicao': typeof V2EleicaoRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/adversaries': typeof AuthenticatedAdversariesRoute
   '/alerts': typeof AuthenticatedAlertsRouteWithChildren
@@ -465,7 +466,6 @@ export interface FileRoutesByTo {
   '/site/lgpd': typeof SiteLgpdRoute
   '/site/privacidade': typeof SitePrivacidadeRoute
   '/site/termos': typeof SiteTermosRoute
-  '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
   '/v2/rede': typeof V2RedeRoute
   '/v2/sinais': typeof V2SinaisRoute
   '/v2/territorio': typeof V2TerritorioRoute
@@ -507,6 +507,7 @@ export interface FileRoutesById {
   '/entrar': typeof EntrarRoute
   '/sair': typeof SairRoute
   '/v2-admin': typeof V2AdminRoute
+  '/v2-eleicao': typeof V2EleicaoRoute
   '/v2/ajustes': typeof V2AjustesRouteRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/adversaries': typeof AuthenticatedAdversariesRoute
@@ -527,7 +528,6 @@ export interface FileRoutesById {
   '/site/termos': typeof SiteTermosRoute
   '/v2/alertas': typeof V2AlertasRouteWithChildren
   '/v2/camara': typeof V2CamaraRouteWithChildren
-  '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
   '/v2/rede': typeof V2RedeRoute
   '/v2/relatorios': typeof V2RelatoriosRouteWithChildren
   '/v2/sinais': typeof V2SinaisRoute
@@ -570,6 +570,7 @@ export interface FileRouteTypes {
     | '/entrar'
     | '/sair'
     | '/v2-admin'
+    | '/v2-eleicao'
     | '/v2/ajustes'
     | '/admin'
     | '/adversaries'
@@ -590,7 +591,6 @@ export interface FileRouteTypes {
     | '/site/termos'
     | '/v2/alertas'
     | '/v2/camara'
-    | '/v2/modo-eleicao'
     | '/v2/rede'
     | '/v2/relatorios'
     | '/v2/sinais'
@@ -629,6 +629,7 @@ export interface FileRouteTypes {
     | '/entrar'
     | '/sair'
     | '/v2-admin'
+    | '/v2-eleicao'
     | '/admin'
     | '/adversaries'
     | '/alerts'
@@ -646,7 +647,6 @@ export interface FileRouteTypes {
     | '/site/lgpd'
     | '/site/privacidade'
     | '/site/termos'
-    | '/v2/modo-eleicao'
     | '/v2/rede'
     | '/v2/sinais'
     | '/v2/territorio'
@@ -687,6 +687,7 @@ export interface FileRouteTypes {
     | '/entrar'
     | '/sair'
     | '/v2-admin'
+    | '/v2-eleicao'
     | '/v2/ajustes'
     | '/_authenticated/admin'
     | '/_authenticated/adversaries'
@@ -707,7 +708,6 @@ export interface FileRouteTypes {
     | '/site/termos'
     | '/v2/alertas'
     | '/v2/camara'
-    | '/v2/modo-eleicao'
     | '/v2/rede'
     | '/v2/relatorios'
     | '/v2/sinais'
@@ -750,6 +750,7 @@ export interface RootRouteChildren {
   EntrarRoute: typeof EntrarRoute
   SairRoute: typeof SairRoute
   V2AdminRoute: typeof V2AdminRoute
+  V2EleicaoRoute: typeof V2EleicaoRoute
   ApiPublicHooksAnalyzePendingRoute: typeof ApiPublicHooksAnalyzePendingRoute
   ApiPublicHooksBackfillWhatsappRoute: typeof ApiPublicHooksBackfillWhatsappRoute
   ApiPublicHooksDetectAlertsRoute: typeof ApiPublicHooksDetectAlertsRoute
@@ -762,6 +763,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/v2-eleicao': {
+      id: '/v2-eleicao'
+      path: '/v2-eleicao'
+      fullPath: '/v2-eleicao'
+      preLoaderRoute: typeof V2EleicaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/v2-admin': {
       id: '/v2-admin'
       path: '/v2-admin'
@@ -865,13 +873,6 @@ declare module '@tanstack/react-router' {
       path: '/rede'
       fullPath: '/v2/rede'
       preLoaderRoute: typeof V2RedeRouteImport
-      parentRoute: typeof V2RouteRoute
-    }
-    '/v2/modo-eleicao': {
-      id: '/v2/modo-eleicao'
-      path: '/modo-eleicao'
-      fullPath: '/v2/modo-eleicao'
-      preLoaderRoute: typeof V2ModoEleicaoRouteImport
       parentRoute: typeof V2RouteRoute
     }
     '/v2/camara': {
@@ -1334,7 +1335,6 @@ interface V2RouteRouteChildren {
   V2AjustesRouteRoute: typeof V2AjustesRouteRouteWithChildren
   V2AlertasRoute: typeof V2AlertasRouteWithChildren
   V2CamaraRoute: typeof V2CamaraRouteWithChildren
-  V2ModoEleicaoRoute: typeof V2ModoEleicaoRoute
   V2RedeRoute: typeof V2RedeRoute
   V2RelatoriosRoute: typeof V2RelatoriosRouteWithChildren
   V2SinaisRoute: typeof V2SinaisRoute
@@ -1346,7 +1346,6 @@ const V2RouteRouteChildren: V2RouteRouteChildren = {
   V2AjustesRouteRoute: V2AjustesRouteRouteWithChildren,
   V2AlertasRoute: V2AlertasRouteWithChildren,
   V2CamaraRoute: V2CamaraRouteWithChildren,
-  V2ModoEleicaoRoute: V2ModoEleicaoRoute,
   V2RedeRoute: V2RedeRoute,
   V2RelatoriosRoute: V2RelatoriosRouteWithChildren,
   V2SinaisRoute: V2SinaisRoute,
@@ -1367,6 +1366,7 @@ const rootRouteChildren: RootRouteChildren = {
   EntrarRoute: EntrarRoute,
   SairRoute: SairRoute,
   V2AdminRoute: V2AdminRoute,
+  V2EleicaoRoute: V2EleicaoRoute,
   ApiPublicHooksAnalyzePendingRoute: ApiPublicHooksAnalyzePendingRoute,
   ApiPublicHooksBackfillWhatsappRoute: ApiPublicHooksBackfillWhatsappRoute,
   ApiPublicHooksDetectAlertsRoute: ApiPublicHooksDetectAlertsRoute,

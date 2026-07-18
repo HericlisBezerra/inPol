@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { V2ErrorComponent, V2NotFound } from "@/components/v2/error-boundary";
+import { V2ErrorComponent, SiteNotFound } from "@/components/v2/error-boundary";
 
 export const Route = createFileRoute("/site")({
   head: () => ({
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/site")({
   }),
   component: SiteLayout,
   errorComponent: V2ErrorComponent,
-  notFoundComponent: V2NotFound,
+  notFoundComponent: SiteNotFound,
 });
 
 function SiteLayout() {

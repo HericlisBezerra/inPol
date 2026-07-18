@@ -3,9 +3,17 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
-function Frame({ children }: { children: ReactNode }) {
+function Frame({
+  children,
+  scope = "v2-root",
+}: {
+  children: ReactNode;
+  scope?: "v2-root" | "v2-site";
+}) {
   return (
-    <div className="v2-root flex min-h-[70vh] flex-col items-center justify-center px-6 text-center">
+    <div
+      className={`${scope} flex min-h-[70vh] flex-col items-center justify-center px-6 text-center`}
+    >
       {children}
     </div>
   );
@@ -59,6 +67,23 @@ export function V2NotFound() {
         className="mt-6 rounded-lg bg-v2-green px-4 py-2.5 text-[14px] font-semibold text-white"
       >
         Voltar ao painel
+      </Link>
+    </Frame>
+  );
+}
+
+/** Site-scoped 404 — a marketing visitor should return to the site, not the app. */
+export function SiteNotFound() {
+  return (
+    <Frame scope="v2-site">
+      <div className="font-display text-[64px] font-semibold leading-none text-v2-ink">404</div>
+      <h1 className="mt-3 text-[20px] font-semibold text-v2-ink">Página não encontrada</h1>
+      <p className="mt-2 text-[14px] text-v2-ink-2">O endereço não existe ou foi movido.</p>
+      <Link
+        to="/site"
+        className="mt-6 rounded-lg bg-v2-green px-4 py-2.5 text-[14px] font-semibold text-white"
+      >
+        Voltar ao site
       </Link>
     </Frame>
   );

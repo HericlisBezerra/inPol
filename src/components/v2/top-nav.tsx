@@ -109,7 +109,7 @@ function AvatarMenu() {
   }, []);
   const items = [
     { to: "/v2/ajustes", label: "Ajustes" },
-    { to: "/v2/modo-eleicao", label: "Modo Eleição" },
+    { to: "/v2-eleicao", label: "Modo Eleição" },
     { to: "/v2-admin", label: "Admin da plataforma" },
   ] as const;
   return (
