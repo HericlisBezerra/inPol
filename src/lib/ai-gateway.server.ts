@@ -13,11 +13,25 @@ export type AiMessage = { role: "system" | "user" | "assistant"; content: string
 
 export interface AiCallOptions {
   model?: string;
+  /** Ordered fallback models tried when the primary fails (transient errors or model
+   *  unavailability). Ex.: MODEL_PRO with fallbackModels [MODEL_FLASH]. */
+  fallbackModels?: string[];
   messages: AiMessage[];
   jsonObject?: boolean;
   temperature?: number;
   maxTokens?: number;
+  /** Per-attempt timeout (ms). Default 60s. */
+  timeoutMs?: number;
+  /** Attempts per model before moving to the next fallback. Default 3. */
+  maxAttempts?: number;
 }
+
+// HTTP statuses worth retrying on the same model (rate limit / transient server errors).
+const TRANSIENT_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_MAX_ATTEMPTS = 3;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export interface AiResult {
   text: string;
@@ -35,28 +49,34 @@ export class AiGatewayError extends Error {
   }
 }
 
-export async function callAi(opts: AiCallOptions): Promise<AiResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new AiGatewayError(500, "GEMINI_API_KEY não está configurada.");
-  }
-  const model = opts.model ?? MODEL_FLASH;
-  const body: Record<string, unknown> = {
-    model,
-    messages: opts.messages,
-  };
+/** One HTTP attempt against a single model. Throws AiGatewayError (status 0 = network/timeout). */
+async function callAiOnce(model: string, apiKey: string, opts: AiCallOptions): Promise<AiResult> {
+  const body: Record<string, unknown> = { model, messages: opts.messages };
   if (opts.temperature !== undefined) body.temperature = opts.temperature;
   if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
   if (opts.jsonObject) body.response_format = { type: "json_object" };
 
-  const res = await fetch(GEMINI_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(GEMINI_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    // Network error or timeout (abort) — treat as transient (status 0).
+    const aborted = e instanceof Error && e.name === "AbortError";
+    throw new AiGatewayError(
+      0,
+      aborted ? "Tempo de resposta da IA esgotado." : "Falha de rede na chamada de IA.",
+      e,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const raw = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -74,6 +94,43 @@ export async function callAi(opts: AiCallOptions): Promise<AiResult> {
   const choice = (raw as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0];
   const text = choice?.message?.content ?? "";
   return { text, raw, model };
+}
+
+/**
+ * Resilient AI call: tries the primary model then each fallback model, retrying transient
+ * failures (429 / 5xx / network / timeout) with exponential backoff. Auth errors (401/403)
+ * fail fast; model-specific errors (400/404 — e.g. a preview model deprecated) skip straight
+ * to the next fallback model. This is what keeps analysis and reports from dying on a blip.
+ */
+export async function callAi(opts: AiCallOptions): Promise<AiResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new AiGatewayError(500, "GEMINI_API_KEY não está configurada.");
+  }
+  const models = [opts.model ?? MODEL_FLASH, ...(opts.fallbackModels ?? [])];
+  const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  let lastError: unknown;
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await callAiOnce(model, apiKey, opts);
+      } catch (e) {
+        lastError = e;
+        const status = e instanceof AiGatewayError ? e.status : 0;
+        if (status === 401 || status === 403) throw e; // key problem — no retry, no fallback helps
+        const transient = status === 0 || TRANSIENT_STATUS.has(status);
+        if (transient && attempt < maxAttempts) {
+          await sleep(400 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+          continue; // retry same model
+        }
+        break; // exhausted retries, or non-transient (400/404) — try next fallback model
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new AiGatewayError(500, "Falha na chamada de IA após tentativas e fallbacks.");
 }
 
 export async function callAiJson<T>(opts: AiCallOptions): Promise<T> {

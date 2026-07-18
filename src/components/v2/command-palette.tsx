@@ -21,6 +21,9 @@ export function V2CommandPalette({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Busca global"
         className="w-full max-w-[640px] overflow-hidden rounded-2xl border border-v2-line bg-v2-surface shadow-[0_24px_64px_rgba(33,31,28,0.24)]"
         onClick={(e) => e.stopPropagation()}
       >

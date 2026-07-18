@@ -80,6 +80,9 @@ export function V2Notifications({ onClose }: { onClose: () => void }) {
   return (
     <div
       ref={ref}
+      role="dialog"
+      aria-modal="false"
+      aria-label="Notificações"
       className="absolute right-0 top-11 z-50 w-[380px] overflow-hidden rounded-2xl border border-v2-line bg-v2-surface shadow-[0_16px_48px_rgba(33,31,28,0.16)]"
     >
       <div className="flex items-center gap-2 border-b border-v2-line px-4 py-3">

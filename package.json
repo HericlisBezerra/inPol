@@ -11,7 +11,10 @@
     "deploy": "vite build && wrangler deploy",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test:smoke": "bun scripts/smoke-v2.mjs"
+    "test:smoke": "bun scripts/smoke-v2.mjs",
+    "test:reports": "bun scripts/test-report-fallback.mjs",
+    "test:ai": "bun scripts/test-ai-gateway.mjs",
+    "test": "bun scripts/test-ai-gateway.mjs && bun scripts/test-report-fallback.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

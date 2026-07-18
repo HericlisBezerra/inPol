@@ -68,9 +68,9 @@ export function V2TopNav({
 /** Mobile bottom tab bar (s13) — primary nav below `lg`, where the top nav links are hidden. */
 const BOTTOM_NAV = [
   { to: "/v2", label: "Painel", icon: "◈", exact: true },
-  { to: "/v2/alertas", label: "Alertas", icon: "▲" },
-  { to: "/v2/territorio", label: "Território", icon: "▦" },
-  { to: "/v2/sinais", label: "Sinais", icon: "◎" },
+  { to: "/v2/alertas", label: "Alertas", icon: "▲", exact: false },
+  { to: "/v2/territorio", label: "Território", icon: "▦", exact: false },
+  { to: "/v2/sinais", label: "Sinais", icon: "◎", exact: false },
 ] as const;
 
 export function V2BottomNav() {

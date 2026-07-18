@@ -2,7 +2,8 @@
 // and asks the AI to write the executive narrative.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { callAi, MODEL_PRO } from "./ai-gateway.server";
+import { callAi, MODEL_PRO, MODEL_FLASH } from "./ai-gateway.server";
+import { buildFallbackReport } from "./report-fallback";
 
 type Kind = "daily" | "weekly" | "monthly";
 
@@ -27,10 +28,24 @@ function periodFor(kind: Kind, now = new Date()): { start: Date; end: Date; titl
 export async function generateReport(orgId: string, kind: Kind): Promise<string> {
   const { start, end, title } = periodFor(kind);
 
-  const { runAnalysisForPendingMessages } = await import("@/lib/ingest.server");
-  const { detectAlertsForOrg } = await import("@/lib/alerts.server");
-  await runAnalysisForPendingMessages(orgId, kind === "daily" ? 120 : 200);
-  await detectAlertsForOrg(orgId);
+  // Best-effort enrichment: analyzing pending messages and refreshing alerts makes the report
+  // richer, but a failure here (e.g. AI hiccup during analysis) must NOT abort the report —
+  // we still generate from whatever data already exists.
+  try {
+    const { runAnalysisForPendingMessages } = await import("@/lib/ingest.server");
+    await runAnalysisForPendingMessages(orgId, kind === "daily" ? 120 : 200);
+  } catch (e) {
+    console.error(
+      `[report] análise pré-relatório falhou (org ${orgId}), seguindo com dados existentes:`,
+      e,
+    );
+  }
+  try {
+    const { detectAlertsForOrg } = await import("@/lib/alerts.server");
+    await detectAlertsForOrg(orgId);
+  } catch (e) {
+    console.error(`[report] detecção de alertas falhou (org ${orgId}), seguindo:`, e);
+  }
 
   const priorLimit = kind === "daily" ? 5 : kind === "weekly" ? 4 : 3;
   const { data: priorSameKind } = await supabaseAdmin
@@ -285,19 +300,28 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
         ? "semanal (últimos 7 dias)"
         : "mensal (últimos 30 dias)";
 
-  const aiResp = await callAi({
-    model: MODEL_PRO,
-    temperature: 0.45,
-    maxTokens: 8000,
-    messages: [
-      {
-        role: "system",
-        content:
-          'Você é o analista-chefe de inteligência política de um gabinete municipal brasileiro. Escreve relatórios densos, jornalísticos e acionáveis em português do Brasil, em markdown limpo. Nunca inventa dados — só usa o que está no JSON fornecido. Cita trechos reais entre aspas quando ilustram um ponto. Prefere análise causal ("por que isso está acontecendo") a listas rasas. Sempre conecta sinais entre canais (WhatsApp × Instagram × imprensa) e nomeia bairros, temas e adversários quando presentes no vocabulário. Quando o JSON contém `prior_reports`, você DEVE ler esses relatórios anteriores e dialogar com eles: dizer o que evoluiu, o que se confirmou, o que arrefeceu, quais recomendações passadas foram atendidas ou ignoradas, e quais temas persistem. O relatório novo é um capítulo de uma série, não um documento isolado. Tom: sério, técnico, direto ao ponto — como um briefing de gabinete de campanha profissional.',
-      },
-      {
-        role: "user",
-        content: `Gere um relatório ${kindLabel} para o gabinete usando EXCLUSIVAMENTE os dados abaixo. O relatório precisa ser longo, profundo e útil — não superficial. Sempre que citar um sinal, use aspas com o trecho real do JSON (external_signals[].excerpt, high_risk_messages[].text, top_topics[].samples[].text). Quando dois sinais convergem (ex: mesmo tema aparece em imprensa e WhatsApp), destaque a convergência.
+  // Resilient AI narrative: pro-preview with flash as fallback, retries + timeout built in.
+  // If it still fails or comes back too thin, we fall back to a deterministic report built
+  // from the aggregated data below — so a period is NEVER left without a report.
+  let markdown: string;
+  let modelVersion: string;
+  let degraded = false;
+  try {
+    const aiResp = await callAi({
+      model: MODEL_PRO,
+      fallbackModels: [MODEL_FLASH],
+      temperature: 0.45,
+      maxTokens: 8000,
+      timeoutMs: 90_000,
+      messages: [
+        {
+          role: "system",
+          content:
+            'Você é o analista-chefe de inteligência política de um gabinete municipal brasileiro. Escreve relatórios densos, jornalísticos e acionáveis em português do Brasil, em markdown limpo. Nunca inventa dados — só usa o que está no JSON fornecido. Cita trechos reais entre aspas quando ilustram um ponto. Prefere análise causal ("por que isso está acontecendo") a listas rasas. Sempre conecta sinais entre canais (WhatsApp × Instagram × imprensa) e nomeia bairros, temas e adversários quando presentes no vocabulário. Quando o JSON contém `prior_reports`, você DEVE ler esses relatórios anteriores e dialogar com eles: dizer o que evoluiu, o que se confirmou, o que arrefeceu, quais recomendações passadas foram atendidas ou ignoradas, e quais temas persistem. O relatório novo é um capítulo de uma série, não um documento isolado. Tom: sério, técnico, direto ao ponto — como um briefing de gabinete de campanha profissional.',
+        },
+        {
+          role: "user",
+          content: `Gere um relatório ${kindLabel} para o gabinete usando EXCLUSIVAMENTE os dados abaixo. O relatório precisa ser longo, profundo e útil — não superficial. Sempre que citar um sinal, use aspas com o trecho real do JSON (external_signals[].excerpt, high_risk_messages[].text, top_topics[].samples[].text). Quando dois sinais convergem (ex: mesmo tema aparece em imprensa e WhatsApp), destaque a convergência.
 
 IMPORTANTE — CONTINUIDADE HISTÓRICA: O JSON traz \`prior_reports\` (relatórios anteriores do mesmo gabinete, mais recentes primeiro). Use-os como memória: compare tendências, verifique se temas quentes anteriores esfriaram ou se agravaram, cite explicitamente o que dizia o relatório anterior quando fizer sentido ("no relatório de DD/MM já apontávamos X; agora Y"), e avalie o cumprimento das recomendações passadas. NÃO copie trechos dos relatórios anteriores — sintetize e evolua.
 
@@ -353,11 +377,26 @@ DADOS:
 \`\`\`json
 ${JSON.stringify(promptData, null, 2)}
 \`\`\``,
-      },
-    ],
-  });
-
-  const markdown = aiResp.text || `# ${title}\n\n(Sem dados suficientes no período.)`;
+        },
+      ],
+    });
+    const text = (aiResp.text ?? "").trim();
+    // A real report carries the markdown title and meaningful length. Thin/truncated output
+    // (maxTokens hit, model stub) counts as a failure → deterministic fallback below.
+    if (text.length < 600 || !text.includes("#")) {
+      throw new Error(`Saída da IA muito curta/incompleta (${text.length} chars).`);
+    }
+    markdown = text;
+    modelVersion = aiResp.model;
+  } catch (e) {
+    console.error(
+      `[report] narrativa por IA falhou (org ${orgId}, ${kind}) — usando fallback determinístico:`,
+      e,
+    );
+    markdown = buildFallbackReport(title, kindLabel, dataBlock);
+    modelVersion = "fallback-deterministico";
+    degraded = true;
+  }
 
   const { data: inserted, error } = await supabaseAdmin
     .from("reports")
@@ -369,7 +408,7 @@ ${JSON.stringify(promptData, null, 2)}
       title,
       markdown,
       data: dataBlock,
-      model_version: aiResp.model,
+      model_version: modelVersion,
     })
     .select("id")
     .single();
@@ -377,7 +416,7 @@ ${JSON.stringify(promptData, null, 2)}
 
   await supabaseAdmin.from("audit_log").insert({
     org_id: orgId,
-    action: `report.${kind}.generated`,
+    action: `report.${kind}.generated${degraded ? ".degraded" : ""}`,
     target_kind: "report",
     target_id: inserted.id,
   });
