@@ -53,9 +53,7 @@ export function V2NotFound() {
     <Frame>
       <div className="font-display text-[64px] font-semibold leading-none text-v2-ink">404</div>
       <h1 className="mt-3 text-[20px] font-semibold text-v2-ink">Página não encontrada</h1>
-      <p className="mt-2 text-[14px] text-v2-ink-2">
-        O endereço não existe ou foi movido.
-      </p>
+      <p className="mt-2 text-[14px] text-v2-ink-2">O endereço não existe ou foi movido.</p>
       <Link
         to="/v2"
         className="mt-6 rounded-lg bg-v2-green px-4 py-2.5 text-[14px] font-semibold text-white"

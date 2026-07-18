@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as V2AdminRouteImport } from './routes/v2-admin'
 import { Route as SairRouteImport } from './routes/sair'
 import { Route as EntrarRouteImport } from './routes/entrar'
 import { Route as ComecarRouteImport } from './routes/comecar'
@@ -26,7 +27,6 @@ import { Route as V2RedeRouteImport } from './routes/v2/rede'
 import { Route as V2ModoEleicaoRouteImport } from './routes/v2/modo-eleicao'
 import { Route as V2CamaraRouteImport } from './routes/v2/camara'
 import { Route as V2AlertasRouteImport } from './routes/v2/alertas'
-import { Route as V2AdminRouteImport } from './routes/v2/admin'
 import { Route as SiteTermosRouteImport } from './routes/site/termos'
 import { Route as SitePrivacidadeRouteImport } from './routes/site/privacidade'
 import { Route as SiteLgpdRouteImport } from './routes/site/lgpd'
@@ -70,6 +70,11 @@ import { Route as ApiPublicHooksBackfillWhatsappRouteImport } from './routes/api
 import { Route as ApiPublicHooksAnalyzePendingRouteImport } from './routes/api/public/hooks/analyze-pending'
 import { Route as ApiPublicEvolutionWebhookTokenRouteImport } from './routes/api/public/evolution.webhook.$token'
 
+const V2AdminRoute = V2AdminRouteImport.update({
+  id: '/v2-admin',
+  path: '/v2-admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SairRoute = SairRouteImport.update({
   id: '/sair',
   path: '/sair',
@@ -152,11 +157,6 @@ const V2CamaraRoute = V2CamaraRouteImport.update({
 const V2AlertasRoute = V2AlertasRouteImport.update({
   id: '/alertas',
   path: '/alertas',
-  getParentRoute: () => V2RouteRoute,
-} as any)
-const V2AdminRoute = V2AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
   getParentRoute: () => V2RouteRoute,
 } as any)
 const SiteTermosRoute = SiteTermosRouteImport.update({
@@ -388,6 +388,7 @@ export interface FileRoutesByFullPath {
   '/comecar': typeof ComecarRoute
   '/entrar': typeof EntrarRoute
   '/sair': typeof SairRoute
+  '/v2-admin': typeof V2AdminRoute
   '/v2/ajustes': typeof V2AjustesRouteRouteWithChildren
   '/admin': typeof AuthenticatedAdminRoute
   '/adversaries': typeof AuthenticatedAdversariesRoute
@@ -406,7 +407,6 @@ export interface FileRoutesByFullPath {
   '/site/lgpd': typeof SiteLgpdRoute
   '/site/privacidade': typeof SitePrivacidadeRoute
   '/site/termos': typeof SiteTermosRoute
-  '/v2/admin': typeof V2AdminRoute
   '/v2/alertas': typeof V2AlertasRouteWithChildren
   '/v2/camara': typeof V2CamaraRouteWithChildren
   '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
@@ -447,6 +447,7 @@ export interface FileRoutesByTo {
   '/comecar': typeof ComecarRoute
   '/entrar': typeof EntrarRoute
   '/sair': typeof SairRoute
+  '/v2-admin': typeof V2AdminRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/adversaries': typeof AuthenticatedAdversariesRoute
   '/alerts': typeof AuthenticatedAlertsRouteWithChildren
@@ -464,7 +465,6 @@ export interface FileRoutesByTo {
   '/site/lgpd': typeof SiteLgpdRoute
   '/site/privacidade': typeof SitePrivacidadeRoute
   '/site/termos': typeof SiteTermosRoute
-  '/v2/admin': typeof V2AdminRoute
   '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
   '/v2/rede': typeof V2RedeRoute
   '/v2/sinais': typeof V2SinaisRoute
@@ -506,6 +506,7 @@ export interface FileRoutesById {
   '/comecar': typeof ComecarRoute
   '/entrar': typeof EntrarRoute
   '/sair': typeof SairRoute
+  '/v2-admin': typeof V2AdminRoute
   '/v2/ajustes': typeof V2AjustesRouteRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/adversaries': typeof AuthenticatedAdversariesRoute
@@ -524,7 +525,6 @@ export interface FileRoutesById {
   '/site/lgpd': typeof SiteLgpdRoute
   '/site/privacidade': typeof SitePrivacidadeRoute
   '/site/termos': typeof SiteTermosRoute
-  '/v2/admin': typeof V2AdminRoute
   '/v2/alertas': typeof V2AlertasRouteWithChildren
   '/v2/camara': typeof V2CamaraRouteWithChildren
   '/v2/modo-eleicao': typeof V2ModoEleicaoRoute
@@ -569,6 +569,7 @@ export interface FileRouteTypes {
     | '/comecar'
     | '/entrar'
     | '/sair'
+    | '/v2-admin'
     | '/v2/ajustes'
     | '/admin'
     | '/adversaries'
@@ -587,7 +588,6 @@ export interface FileRouteTypes {
     | '/site/lgpd'
     | '/site/privacidade'
     | '/site/termos'
-    | '/v2/admin'
     | '/v2/alertas'
     | '/v2/camara'
     | '/v2/modo-eleicao'
@@ -628,6 +628,7 @@ export interface FileRouteTypes {
     | '/comecar'
     | '/entrar'
     | '/sair'
+    | '/v2-admin'
     | '/admin'
     | '/adversaries'
     | '/alerts'
@@ -645,7 +646,6 @@ export interface FileRouteTypes {
     | '/site/lgpd'
     | '/site/privacidade'
     | '/site/termos'
-    | '/v2/admin'
     | '/v2/modo-eleicao'
     | '/v2/rede'
     | '/v2/sinais'
@@ -686,6 +686,7 @@ export interface FileRouteTypes {
     | '/comecar'
     | '/entrar'
     | '/sair'
+    | '/v2-admin'
     | '/v2/ajustes'
     | '/_authenticated/admin'
     | '/_authenticated/adversaries'
@@ -704,7 +705,6 @@ export interface FileRouteTypes {
     | '/site/lgpd'
     | '/site/privacidade'
     | '/site/termos'
-    | '/v2/admin'
     | '/v2/alertas'
     | '/v2/camara'
     | '/v2/modo-eleicao'
@@ -749,6 +749,7 @@ export interface RootRouteChildren {
   ComecarRoute: typeof ComecarRoute
   EntrarRoute: typeof EntrarRoute
   SairRoute: typeof SairRoute
+  V2AdminRoute: typeof V2AdminRoute
   ApiPublicHooksAnalyzePendingRoute: typeof ApiPublicHooksAnalyzePendingRoute
   ApiPublicHooksBackfillWhatsappRoute: typeof ApiPublicHooksBackfillWhatsappRoute
   ApiPublicHooksDetectAlertsRoute: typeof ApiPublicHooksDetectAlertsRoute
@@ -761,6 +762,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/v2-admin': {
+      id: '/v2-admin'
+      path: '/v2-admin'
+      fullPath: '/v2-admin'
+      preLoaderRoute: typeof V2AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sair': {
       id: '/sair'
       path: '/sair'
@@ -878,13 +886,6 @@ declare module '@tanstack/react-router' {
       path: '/alertas'
       fullPath: '/v2/alertas'
       preLoaderRoute: typeof V2AlertasRouteImport
-      parentRoute: typeof V2RouteRoute
-    }
-    '/v2/admin': {
-      id: '/v2/admin'
-      path: '/admin'
-      fullPath: '/v2/admin'
-      preLoaderRoute: typeof V2AdminRouteImport
       parentRoute: typeof V2RouteRoute
     }
     '/site/termos': {
@@ -1331,7 +1332,6 @@ const V2RelatoriosRouteWithChildren = V2RelatoriosRoute._addFileChildren(
 
 interface V2RouteRouteChildren {
   V2AjustesRouteRoute: typeof V2AjustesRouteRouteWithChildren
-  V2AdminRoute: typeof V2AdminRoute
   V2AlertasRoute: typeof V2AlertasRouteWithChildren
   V2CamaraRoute: typeof V2CamaraRouteWithChildren
   V2ModoEleicaoRoute: typeof V2ModoEleicaoRoute
@@ -1344,7 +1344,6 @@ interface V2RouteRouteChildren {
 
 const V2RouteRouteChildren: V2RouteRouteChildren = {
   V2AjustesRouteRoute: V2AjustesRouteRouteWithChildren,
-  V2AdminRoute: V2AdminRoute,
   V2AlertasRoute: V2AlertasRouteWithChildren,
   V2CamaraRoute: V2CamaraRouteWithChildren,
   V2ModoEleicaoRoute: V2ModoEleicaoRoute,
@@ -1367,6 +1366,7 @@ const rootRouteChildren: RootRouteChildren = {
   ComecarRoute: ComecarRoute,
   EntrarRoute: EntrarRoute,
   SairRoute: SairRoute,
+  V2AdminRoute: V2AdminRoute,
   ApiPublicHooksAnalyzePendingRoute: ApiPublicHooksAnalyzePendingRoute,
   ApiPublicHooksBackfillWhatsappRoute: ApiPublicHooksBackfillWhatsappRoute,
   ApiPublicHooksDetectAlertsRoute: ApiPublicHooksDetectAlertsRoute,

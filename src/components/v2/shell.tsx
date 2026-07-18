@@ -2,7 +2,7 @@
  *  Wrap every authenticated v2 screen in this. The `.v2-root` class opts the whole
  *  subtree into the v2 palette without affecting the legacy app. */
 import { useEffect, useState, type ReactNode } from "react";
-import { V2TopNav } from "./top-nav";
+import { V2TopNav, V2BottomNav } from "./top-nav";
 import { V2CommandPalette } from "./command-palette";
 
 export function V2AppShell({ children }: { children: ReactNode }) {
@@ -28,7 +28,10 @@ export function V2AppShell({ children }: { children: ReactNode }) {
         onCloseNotif={() => setNotifOpen(false)}
         onOpenPalette={() => setPaletteOpen(true)}
       />
-      <main className="mx-auto w-full max-w-[1120px] px-6 py-8 md:px-10">{children}</main>
+      <main className="mx-auto w-full max-w-[1120px] px-6 pb-24 pt-8 md:px-10 lg:pb-8">
+        {children}
+      </main>
+      <V2BottomNav />
       {paletteOpen && <V2CommandPalette onClose={() => setPaletteOpen(false)} />}
     </div>
   );

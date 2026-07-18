@@ -11,14 +11,15 @@ export const Route = createFileRoute("/v2/ajustes")({
  * horizontal rolável. O item ativo usa fundo verde-claro (v2-green-tint) e
  * peso 650 — mesmo tratamento do design estático.
  */
+// Ordem e nomes canônicos do design (s12/s17–s27).
 const NAV_ITEMS: { to: string; label: string; exact?: boolean }[] = [
-  { to: "/v2/ajustes", label: "Visão geral", exact: true },
-  { to: "/v2/ajustes/equipe", label: "Equipe e usuários" },
+  { to: "/v2/ajustes", label: "Vocabulário", exact: true },
   { to: "/v2/ajustes/whatsapp", label: "WhatsApp" },
   { to: "/v2/ajustes/fontes", label: "Fontes locais" },
-  { to: "/v2/ajustes/organizacoes", label: "Organizações" },
-  { to: "/v2/ajustes/eleitos", label: "Eleitos TSE" },
+  { to: "/v2/ajustes/eleitos", label: "Eleitos (TSE)" },
   { to: "/v2/ajustes/notificacoes", label: "Notificações" },
+  { to: "/v2/ajustes/equipe", label: "Equipe e acesso" },
+  { to: "/v2/ajustes/organizacoes", label: "Organizações" },
   { to: "/v2/ajustes/auditoria", label: "Auditoria LGPD" },
 ];
 

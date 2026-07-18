@@ -298,10 +298,10 @@
   --v2-warn-bg: #f9efdd;
   --v2-obs: #77726a;
   --v2-obs-bg: #f1efe9;
-  --v2-blue: #3d6ea5;
+  --v2-blue: #2b5e8c;
   --v2-blue-bg: #e9f1f7;
-  --v2-purple: #7a5ba8;
-  --v2-purple-bg: #f0eaf6;
+  --v2-purple: #6b5e8c;
+  --v2-purple-bg: #efecf6;
 
   font-family: "Instrument Sans", system-ui, sans-serif;
   color: var(--v2-ink);

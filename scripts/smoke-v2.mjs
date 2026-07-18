@@ -28,7 +28,7 @@ const ROUTES = [
   ["/v2/ajustes/eleitos", "TSE"],
   ["/v2/ajustes/notificacoes", "Notifica"],
   ["/v2/ajustes/auditoria", "Auditoria"],
-  ["/v2/admin", "PLATAFORMA"],
+  ["/v2-admin", "PLATAFORMA"],
   ["/entrar", "Inpol"],
   ["/sair", "Entrar novamente"],
   ["/comecar", "organiza"],
