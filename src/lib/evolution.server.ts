@@ -127,3 +127,62 @@ export async function setWebhook(
     }),
   });
 }
+
+// Fetch historical messages from a group via Evolution v2 chat/findMessages.
+// Handles the multiple response shapes across Evolution builds:
+//   - { messages: { records: [...] } }
+//   - { messages: [...] }
+//   - [ ... ]  (top-level array)
+// Only returns messages with messageTimestamp >= sinceTsSeconds (when provided).
+export async function fetchMessagesForGroup(
+  baseUrl: string,
+  apiKey: string,
+  instanceName: string,
+  opts: { remoteJid: string; sinceTsSeconds?: number; pageSize?: number; maxPages?: number },
+): Promise<Array<Record<string, unknown>>> {
+  const pageSize = opts.pageSize ?? 100;
+  const maxPages = opts.maxPages ?? 20;
+  const out: Array<Record<string, unknown>> = [];
+
+  for (let page = 1; page <= maxPages; page++) {
+    const body: Record<string, unknown> = {
+      where: { key: { remoteJid: opts.remoteJid } },
+      page,
+      offset: pageSize,
+    };
+    let raw: unknown;
+    try {
+      raw = await evolutionFetch(baseUrl, apiKey, `/chat/findMessages/${instanceName}`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      if (e instanceof EvolutionError && e.status === 404) break;
+      throw e;
+    }
+
+    const records: unknown[] = (() => {
+      if (Array.isArray(raw)) return raw;
+      const r = raw as { messages?: unknown };
+      if (Array.isArray(r.messages)) return r.messages;
+      const m = r.messages as { records?: unknown } | undefined;
+      if (m && Array.isArray(m.records)) return m.records;
+      return [];
+    })();
+    if (records.length === 0) break;
+
+    let stop = false;
+    for (const rec of records) {
+      const obj = rec as Record<string, unknown>;
+      const ts = Number(obj.messageTimestamp ?? 0);
+      if (opts.sinceTsSeconds && ts && ts < opts.sinceTsSeconds) {
+        stop = true;
+        continue;
+      }
+      out.push(obj);
+    }
+    if (records.length < pageSize) break;
+    if (stop) break;
+  }
+  return out;
+}

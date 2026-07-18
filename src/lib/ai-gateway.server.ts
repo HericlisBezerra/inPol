@@ -3,6 +3,12 @@
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
+// Model ids centralizados. Os `gemini-2.5-*` foram descontinuados para chaves
+// novas (404 "not available to new users") — não reintroduzir.
+// FLASH: alto volume (análise, busca). PRO: relatórios executivos.
+export const MODEL_FLASH = "gemini-3.5-flash";
+export const MODEL_PRO = "gemini-3.1-pro-preview";
+
 export type AiMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export interface AiCallOptions {
@@ -30,7 +36,7 @@ export async function callAi(opts: AiCallOptions): Promise<AiResult> {
   if (!apiKey) {
     throw new AiGatewayError(500, "GEMINI_API_KEY não está configurada.");
   }
-  const model = opts.model ?? "gemini-2.5-flash";
+  const model = opts.model ?? MODEL_FLASH;
   const body: Record<string, unknown> = {
     model,
     messages: opts.messages,
@@ -71,8 +77,39 @@ export async function callAiJson<T>(opts: AiCallOptions): Promise<T> {
   try {
     return JSON.parse(result.text) as T;
   } catch {
-    // Strip code fences if model returned ```json ... ```
+    // Fallback: remove code fences (```json ... ```) e extrai o primeiro valor
+    // JSON balanceado — modelos preview às vezes anexam um `}`/`]` extra depois
+    // do fechamento, o que quebra o JSON.parse estrito.
     const cleaned = result.text.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-    return JSON.parse(cleaned) as T;
+    return JSON.parse(extractBalancedJson(cleaned)) as T;
   }
+}
+
+// Extrai o primeiro objeto/array JSON balanceado, ignorando qualquer texto
+// antes do primeiro `{`/`[` e depois do fechamento correspondente. Respeita
+// strings e escapes para não contar chaves dentro de aspas.
+function extractBalancedJson(input: string): string {
+  const start = input.search(/[{[]/);
+  if (start < 0) return input;
+  const open = input[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < input.length; i++) {
+    const ch = input[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === open) depth++;
+    else if (ch === close) {
+      depth--;
+      if (depth === 0) return input.slice(start, i + 1);
+    }
+  }
+  return input.slice(start);
 }

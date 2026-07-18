@@ -1,0 +1,47 @@
+-- Recreated (not applied) definition of the pg_cron job "inpol-report-monthly",
+-- confirmed via `query_database` against the Lovable-hosted Postgres project
+-- (fab025bf-498e-4c1d-a0be-6a6ab1563132) on 2026-07-17:
+--
+--   select jobid, jobname, schedule, command, active from cron.job
+--   where jobname = 'inpol-report-monthly';
+--
+--   jobid: 6 | schedule: '0 7 1 * *' | active: true
+--
+-- IMPORTANT: this migration file exists ONLY to preserve the job definition in
+-- version control. Running `cron.schedule(...)` requires the pg_cron extension
+-- and executes against whatever Postgres the migration is applied to — it will
+-- NOT recreate itself automatically just because this file exists in the repo,
+-- and it has NOT been applied anywhere yet (not on Lovable's own Postgres, and
+-- not on any destination database).
+--
+-- When Fase 4 of the Lovable decoupling migration happens (see vault note
+-- "Plano-Desacoplar-Lovable"), this job must be scheduled manually against the
+-- new destination Supabase/Postgres project — e.g. by running (adjusted) SQL like:
+--
+--   select cron.schedule(
+--     'inpol-report-monthly',
+--     '0 7 1 * *',
+--     $$
+--     select net.http_post(
+--       url := 'https://<new-domain>/api/public/hooks/generate-reports',
+--       headers := '{"Content-Type":"application/json","apikey":"<new-project-publishable-key>"}'::jsonb,
+--       body := '{"kind":"monthly"}'::jsonb
+--     );
+--     $$
+--   );
+--
+-- The URL and apikey values must be updated to match the destination
+-- environment — the values below are the ones currently live on the Lovable
+-- project and are only preserved here for reference, not for direct reuse.
+
+-- select cron.schedule(
+--   'inpol-report-monthly',
+--   '0 7 1 * *',
+--   $$
+--   SELECT net.http_post(
+--     url:='https://project--fab025bf-498e-4c1d-a0be-6a6ab1563132.lovable.app/api/public/hooks/generate-reports',
+--     headers:='{"Content-Type":"application/json","apikey":"sb_publishable_WfGGNU5yiL0Lo-9eAgZzDg_FT7daKpG"}'::jsonb,
+--     body:='{"kind":"monthly"}'::jsonb
+--   );
+--   $$
+-- );

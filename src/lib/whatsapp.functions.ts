@@ -326,3 +326,24 @@ export const toggleGroupMonitoring = createServerFn({ method: "POST" })
 
     return { ok: true };
   });
+
+export const backfillInstanceMessages = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        orgId: z.string().uuid(),
+        instanceId: z.string().uuid(),
+        days: z.number().min(1).max(60).default(14),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: ok } = await context.supabase.rpc("is_org_admin", {
+      _user_id: context.userId,
+      _org_id: data.orgId,
+    });
+    if (!ok) throw new Error("Sem permissão");
+    const { backfillInstance } = await import("@/lib/backfill.server");
+    return backfillInstance(data.instanceId, { days: data.days });
+  });

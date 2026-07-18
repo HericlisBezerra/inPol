@@ -33,6 +33,7 @@ import { Route as ApiPublicHooksScanInstagramRouteImport } from './routes/api/pu
 import { Route as ApiPublicHooksPurgeRetentionRouteImport } from './routes/api/public/hooks/purge-retention'
 import { Route as ApiPublicHooksGenerateReportsRouteImport } from './routes/api/public/hooks/generate-reports'
 import { Route as ApiPublicHooksDetectAlertsRouteImport } from './routes/api/public/hooks/detect-alerts'
+import { Route as ApiPublicHooksBackfillWhatsappRouteImport } from './routes/api/public/hooks/backfill-whatsapp'
 import { Route as ApiPublicHooksAnalyzePendingRouteImport } from './routes/api/public/hooks/analyze-pending'
 import { Route as ApiPublicEvolutionWebhookTokenRouteImport } from './routes/api/public/evolution.webhook.$token'
 
@@ -162,6 +163,12 @@ const ApiPublicHooksDetectAlertsRoute =
     path: '/api/public/hooks/detect-alerts',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksBackfillWhatsappRoute =
+  ApiPublicHooksBackfillWhatsappRouteImport.update({
+    id: '/api/public/hooks/backfill-whatsapp',
+    path: '/api/public/hooks/backfill-whatsapp',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksAnalyzePendingRoute =
   ApiPublicHooksAnalyzePendingRouteImport.update({
     id: '/api/public/hooks/analyze-pending',
@@ -195,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/alerts/$alertId': typeof AuthenticatedAlertsAlertIdRoute
   '/reports/$reportId': typeof AuthenticatedReportsReportIdRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
+  '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
   '/api/public/hooks/generate-reports': typeof ApiPublicHooksGenerateReportsRoute
   '/api/public/hooks/purge-retention': typeof ApiPublicHooksPurgeRetentionRoute
@@ -222,6 +230,7 @@ export interface FileRoutesByTo {
   '/alerts/$alertId': typeof AuthenticatedAlertsAlertIdRoute
   '/reports/$reportId': typeof AuthenticatedReportsReportIdRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
+  '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
   '/api/public/hooks/generate-reports': typeof ApiPublicHooksGenerateReportsRoute
   '/api/public/hooks/purge-retention': typeof ApiPublicHooksPurgeRetentionRoute
@@ -251,6 +260,7 @@ export interface FileRoutesById {
   '/_authenticated/alerts/$alertId': typeof AuthenticatedAlertsAlertIdRoute
   '/_authenticated/reports/$reportId': typeof AuthenticatedReportsReportIdRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
+  '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
   '/api/public/hooks/generate-reports': typeof ApiPublicHooksGenerateReportsRoute
   '/api/public/hooks/purge-retention': typeof ApiPublicHooksPurgeRetentionRoute
@@ -280,6 +290,7 @@ export interface FileRouteTypes {
     | '/alerts/$alertId'
     | '/reports/$reportId'
     | '/api/public/hooks/analyze-pending'
+    | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
     | '/api/public/hooks/generate-reports'
     | '/api/public/hooks/purge-retention'
@@ -307,6 +318,7 @@ export interface FileRouteTypes {
     | '/alerts/$alertId'
     | '/reports/$reportId'
     | '/api/public/hooks/analyze-pending'
+    | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
     | '/api/public/hooks/generate-reports'
     | '/api/public/hooks/purge-retention'
@@ -335,6 +347,7 @@ export interface FileRouteTypes {
     | '/_authenticated/alerts/$alertId'
     | '/_authenticated/reports/$reportId'
     | '/api/public/hooks/analyze-pending'
+    | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
     | '/api/public/hooks/generate-reports'
     | '/api/public/hooks/purge-retention'
@@ -348,6 +361,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ApiPublicHooksAnalyzePendingRoute: typeof ApiPublicHooksAnalyzePendingRoute
+  ApiPublicHooksBackfillWhatsappRoute: typeof ApiPublicHooksBackfillWhatsappRoute
   ApiPublicHooksDetectAlertsRoute: typeof ApiPublicHooksDetectAlertsRoute
   ApiPublicHooksGenerateReportsRoute: typeof ApiPublicHooksGenerateReportsRoute
   ApiPublicHooksPurgeRetentionRoute: typeof ApiPublicHooksPurgeRetentionRoute
@@ -526,6 +540,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksDetectAlertsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/backfill-whatsapp': {
+      id: '/api/public/hooks/backfill-whatsapp'
+      path: '/api/public/hooks/backfill-whatsapp'
+      fullPath: '/api/public/hooks/backfill-whatsapp'
+      preLoaderRoute: typeof ApiPublicHooksBackfillWhatsappRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/analyze-pending': {
       id: '/api/public/hooks/analyze-pending'
       path: '/api/public/hooks/analyze-pending'
@@ -607,6 +628,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ApiPublicHooksAnalyzePendingRoute: ApiPublicHooksAnalyzePendingRoute,
+  ApiPublicHooksBackfillWhatsappRoute: ApiPublicHooksBackfillWhatsappRoute,
   ApiPublicHooksDetectAlertsRoute: ApiPublicHooksDetectAlertsRoute,
   ApiPublicHooksGenerateReportsRoute: ApiPublicHooksGenerateReportsRoute,
   ApiPublicHooksPurgeRetentionRoute: ApiPublicHooksPurgeRetentionRoute,

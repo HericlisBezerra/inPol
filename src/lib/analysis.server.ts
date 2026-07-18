@@ -2,7 +2,7 @@
 // Takes a batch of raw messages + the org vocabulary and produces
 // structured insight rows for message_analyses.
 
-import { callAiJson, AiGatewayError } from "./ai-gateway.server";
+import { callAiJson, AiGatewayError, MODEL_FLASH } from "./ai-gateway.server";
 
 export interface VocabularyContext {
   neighborhoods: string[];
@@ -55,7 +55,7 @@ Regras:
 export async function analyzeBatch(
   vocab: VocabularyContext,
   messages: AnalysisInput[],
-  model = "gemini-2.5-flash",
+  model = MODEL_FLASH,
 ): Promise<{ results: AnalysisOutput[]; model: string }> {
   if (messages.length === 0) return { results: [], model };
 

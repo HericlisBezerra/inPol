@@ -2,7 +2,7 @@
 // and asks the AI to write the executive narrative.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { callAi } from "./ai-gateway.server";
+import { callAi, MODEL_PRO } from "./ai-gateway.server";
 
 type Kind = "daily" | "weekly" | "monthly";
 
@@ -27,6 +27,27 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
   const { detectAlertsForOrg } = await import("@/lib/alerts.server");
   await runAnalysisForPendingMessages(orgId, kind === "daily" ? 120 : 200);
   await detectAlertsForOrg(orgId);
+
+  const priorLimit = kind === "daily" ? 5 : kind === "weekly" ? 4 : 3;
+  const { data: priorSameKind } = await supabaseAdmin
+    .from("reports")
+    .select("kind, title, period_start, period_end, generated_at, markdown")
+    .eq("org_id", orgId)
+    .eq("kind", kind)
+    .lt("generated_at", end.toISOString())
+    .order("generated_at", { ascending: false })
+    .limit(priorLimit);
+  // For weekly/monthly, also include the most recent broader report for narrative continuity
+  const { data: priorBroader } = kind === "daily"
+    ? { data: [] as typeof priorSameKind }
+    : await supabaseAdmin
+        .from("reports")
+        .select("kind, title, period_start, period_end, generated_at, markdown")
+        .eq("org_id", orgId)
+        .in("kind", kind === "weekly" ? ["monthly"] : ["weekly", "monthly"])
+        .lt("generated_at", end.toISOString())
+        .order("generated_at", { ascending: false })
+        .limit(2);
 
   const [{ data: org }, { data: analyses }, { data: alerts }, { data: vocab }, { data: signals }] = await Promise.all([
     supabaseAdmin.from("organizations").select("name, city").eq("id", orgId).maybeSingle(),
@@ -187,28 +208,55 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     sample_alerts: (alerts ?? []).slice(0, 20),
   };
 
+  // Prior reports as narrative context (truncated to keep tokens sane)
+  const trimMd = (md: string | null | undefined, max: number) => {
+    const s = (md ?? "").trim();
+    return s.length > max ? s.slice(0, max) + "\n\n[…truncado…]" : s;
+  };
+  const priorReports = [
+    ...(priorSameKind ?? []).map((r) => ({
+      kind: r.kind,
+      title: r.title,
+      period_start: r.period_start,
+      period_end: r.period_end,
+      generated_at: r.generated_at,
+      markdown: trimMd(r.markdown, kind === "daily" ? 2500 : 4000),
+    })),
+    ...(priorBroader ?? []).map((r) => ({
+      kind: r.kind,
+      title: r.title,
+      period_start: r.period_start,
+      period_end: r.period_end,
+      generated_at: r.generated_at,
+      markdown: trimMd(r.markdown, 5000),
+    })),
+  ];
+
   // Reduced payload for the AI prompt (avoid token bloat but keep quotes for citation)
   const promptData = {
     ...dataBlock,
     external_signals: topExternalForPrompt,
     sample_alerts: (alerts ?? []).slice(0, 12),
+    prior_reports: priorReports,
   };
 
   const kindLabel = kind === "daily" ? "diário (últimas 24h)" : kind === "weekly" ? "semanal (últimos 7 dias)" : "mensal (últimos 30 dias)";
 
   const aiResp = await callAi({
-    model: "gemini-2.5-pro",
+    model: MODEL_PRO,
     temperature: 0.45,
-    maxTokens: 6000,
+    maxTokens: 8000,
     messages: [
       {
         role: "system",
         content:
-          "Você é o analista-chefe de inteligência política de um gabinete municipal brasileiro. Escreve relatórios densos, jornalísticos e acionáveis em português do Brasil, em markdown limpo. Nunca inventa dados — só usa o que está no JSON fornecido. Cita trechos reais entre aspas quando ilustram um ponto. Prefere análise causal (\"por que isso está acontecendo\") a listas rasas. Sempre conecta sinais entre canais (WhatsApp × Instagram × imprensa) e nomeia bairros, temas e adversários quando presentes no vocabulário. Tom: sério, técnico, direto ao ponto — como um briefing de gabinete de campanha profissional.",
+          "Você é o analista-chefe de inteligência política de um gabinete municipal brasileiro. Escreve relatórios densos, jornalísticos e acionáveis em português do Brasil, em markdown limpo. Nunca inventa dados — só usa o que está no JSON fornecido. Cita trechos reais entre aspas quando ilustram um ponto. Prefere análise causal (\"por que isso está acontecendo\") a listas rasas. Sempre conecta sinais entre canais (WhatsApp × Instagram × imprensa) e nomeia bairros, temas e adversários quando presentes no vocabulário. Quando o JSON contém `prior_reports`, você DEVE ler esses relatórios anteriores e dialogar com eles: dizer o que evoluiu, o que se confirmou, o que arrefeceu, quais recomendações passadas foram atendidas ou ignoradas, e quais temas persistem. O relatório novo é um capítulo de uma série, não um documento isolado. Tom: sério, técnico, direto ao ponto — como um briefing de gabinete de campanha profissional.",
       },
       {
         role: "user",
         content: `Gere um relatório ${kindLabel} para o gabinete usando EXCLUSIVAMENTE os dados abaixo. O relatório precisa ser longo, profundo e útil — não superficial. Sempre que citar um sinal, use aspas com o trecho real do JSON (external_signals[].excerpt, high_risk_messages[].text, top_topics[].samples[].text). Quando dois sinais convergem (ex: mesmo tema aparece em imprensa e WhatsApp), destaque a convergência.
+
+IMPORTANTE — CONTINUIDADE HISTÓRICA: O JSON traz \`prior_reports\` (relatórios anteriores do mesmo gabinete, mais recentes primeiro). Use-os como memória: compare tendências, verifique se temas quentes anteriores esfriaram ou se agravaram, cite explicitamente o que dizia o relatório anterior quando fizer sentido ("no relatório de DD/MM já apontávamos X; agora Y"), e avalie o cumprimento das recomendações passadas. NÃO copie trechos dos relatórios anteriores — sintetize e evolua.
 
 Estruture assim (mantenha exatamente estes títulos):
 

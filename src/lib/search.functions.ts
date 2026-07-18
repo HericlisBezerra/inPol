@@ -57,7 +57,7 @@ export const searchWeb = createServerFn({ method: "POST" })
       .eq("org_id", data.orgId)
       .eq("kind", "news_domain");
 
-    const { callAi } = await import("@/lib/ai-gateway.server");
+    const { callAi, MODEL_FLASH } = await import("@/lib/ai-gateway.server");
     const domainList = (domains ?? []).map((d) => d.value).join(", ");
     const prompt = `Busque na imprensa local (domínios sugeridos: ${domainList || "tribunadejundiai.com.br, bomdiajundiai.com.br, g1.globo.com"}) por: "${data.q}"
 
@@ -67,7 +67,7 @@ Responda com até 8 resultados em JSON estrito:
 Se não souber de fato, retorne {"results":[]}. Não invente URLs.`;
     try {
       const { text } = await callAi({
-        model: "gemini-2.5-flash",
+        model: MODEL_FLASH,
         messages: [
           { role: "system", content: "Você é um buscador de imprensa. Use apenas conhecimento factual; nunca invente URLs ou notícias." },
           { role: "user", content: prompt },
