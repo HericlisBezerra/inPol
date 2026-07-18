@@ -26,9 +26,12 @@ function Screen() {
           Câmara — e transforma tudo em três coisas: <b>o que fazer, quando e onde</b>.
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <button className="rounded-[10px] bg-v2-green px-[26px] py-[13px] text-[15px] font-[650] text-white transition-colors hover:bg-v2-green-hover">
+          <a
+            href="#"
+            className="rounded-[10px] bg-v2-green px-[26px] py-[13px] text-[15px] font-[650] text-white transition-colors hover:bg-v2-green-hover"
+          >
             Agendar demonstração
-          </button>
+          </a>
           <Link
             to="/v2"
             className="rounded-[10px] border border-v2-line-strong bg-v2-card px-[26px] py-[13px] text-[15px] font-[650] text-v2-ink transition-colors hover:bg-v2-track"
@@ -195,8 +198,7 @@ function Screen() {
           <PlanCard
             name="Gabinete"
             audience="cidades até 100 mil hab."
-            price="R$ 2.900"
-            per="/mês"
+            price="Sob consulta"
             features={[
               "1 instância WhatsApp · 60 grupos",
               "Alertas + briefing diário",
@@ -231,9 +233,12 @@ function Screen() {
             num grupo de bairro. <span className="italic text-v2-mint">Leia antes.</span>
           </div>
           <div className="mt-[26px] flex justify-center">
-            <button className="rounded-[10px] bg-v2-mint px-[26px] py-[13px] text-[15px] font-[650] text-v2-panel transition-opacity hover:opacity-90">
+            <a
+              href="#"
+              className="rounded-[10px] bg-v2-mint px-[26px] py-[13px] text-[15px] font-[650] text-v2-panel transition-opacity hover:opacity-90"
+            >
               Agendar demonstração
-            </button>
+            </a>
           </div>
         </div>
         <SiteFooter />
@@ -265,9 +270,12 @@ function SiteHeader() {
       <Link to="/entrar" className="text-[13.5px] font-[650] text-v2-ink hover:text-v2-green">
         Entrar
       </Link>
-      <button className="rounded-lg bg-v2-green px-[18px] py-[9px] text-[13.5px] font-[650] text-white transition-colors hover:bg-v2-green-hover">
+      <a
+        href="#"
+        className="rounded-lg bg-v2-green px-[18px] py-[9px] text-[13.5px] font-[650] text-white transition-colors hover:bg-v2-green-hover"
+      >
         Agendar demonstração
-      </button>
+      </a>
     </header>
   );
 }
@@ -356,9 +364,12 @@ function PlanCard({
           <li key={f}>✓ {f}</li>
         ))}
       </ul>
-      <button className="mt-[18px] w-full rounded-lg border border-v2-line-strong py-2.5 text-center text-[13.5px] font-[650] text-v2-ink transition-colors hover:bg-v2-track">
+      <a
+        href="#"
+        className="mt-[18px] block w-full rounded-lg border border-v2-line-strong py-2.5 text-center text-[13.5px] font-[650] text-v2-ink transition-colors hover:bg-v2-track"
+      >
         {cta}
-      </button>
+      </a>
     </div>
   );
 }
@@ -379,17 +390,19 @@ function PlanCardFeatured() {
       <div className="text-[15px] font-[650]">Cidade</div>
       <div className="mt-[3px] text-[12.5px] text-v2-panel-ink">100 mil a 500 mil hab.</div>
       <div className="mt-3.5 flex items-baseline gap-1">
-        <span className="font-display text-[34px] font-[550]">R$ 6.900</span>
-        <span className="text-[12.5px] text-v2-panel-ink">/mês</span>
+        <span className="font-display text-[34px] font-[550]">Sob consulta</span>
       </div>
       <ul className="mt-3 text-[13px] leading-8 text-white/80">
         {features.map((f) => (
           <li key={f}>✓ {f}</li>
         ))}
       </ul>
-      <button className="mt-[18px] w-full rounded-lg bg-v2-mint py-2.5 text-center text-[13.5px] font-[650] text-v2-panel transition-opacity hover:opacity-90">
+      <a
+        href="#"
+        className="mt-[18px] block w-full rounded-lg bg-v2-mint py-2.5 text-center text-[13.5px] font-[650] text-v2-panel transition-opacity hover:opacity-90"
+      >
         Agendar demonstração
-      </button>
+      </a>
     </div>
   );
 }
