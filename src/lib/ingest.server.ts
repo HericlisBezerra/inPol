@@ -313,7 +313,10 @@ export async function runAnalysisForMessages(orgId: string, messageIds: string[]
     try {
       const { results, model } = await analyzeBatch(vocab, slice);
       const rows = results
-        .filter((r) => r && r.id)
+        // Only keep results whose id maps to a real message in THIS slice — the model can
+        // hallucinate/duplicate ids, and a bogus message_id would FK-poison the whole upsert
+        // and wrongly mark every valid message in the chunk as "error".
+        .filter((r) => r && r.id && msgById.has(r.id))
         .map((r) => {
           const msg = msgById.get(r.id);
           const matches = matchVocabulary(msg?.content ?? "", vocabRows);
@@ -394,11 +397,14 @@ export async function runAnalysisForPendingMessages(
   orgId: string,
   limit = 60,
 ): Promise<{ analyzed: number; selected: number }> {
+  // Include "error" so a message that failed once (transient AI blip, bad chunk) is retried on
+  // the next cycle instead of being lost forever — the gateway now retries transient failures,
+  // so most self-heal. Without this, one failure = permanent gap in the analyzed data.
   const { data: pending, error } = await supabaseAdmin
     .from("raw_messages")
     .select("id")
     .eq("org_id", orgId)
-    .eq("analysis_status", "pending")
+    .in("analysis_status", ["pending", "error"])
     .not("content", "is", null)
     .order("posted_at", { ascending: false })
     .limit(limit);
