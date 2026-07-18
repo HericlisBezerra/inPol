@@ -1,13 +1,35 @@
-// Google Gemini helpers (server-only).
-// Uses the OpenAI-compatible /v1beta/openai/chat/completions endpoint with GEMINI_API_KEY.
+// Provider-agnostic AI gateway (server-only).
+// Every supported provider exposes an OpenAI-compatible /chat/completions endpoint, so one
+// code path serves Gemini and DeepSeek. The provider is inferred from the model id prefix,
+// which lets a single fallback chain mix providers (ex.: DeepSeek → Gemini). A provider whose
+// API key is not configured is transparently SKIPPED to the next fallback model.
 
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+type Provider = { name: string; baseUrl: string; keyEnv: string };
+const PROVIDERS: Record<string, Provider> = {
+  gemini: {
+    name: "gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    keyEnv: "GEMINI_API_KEY",
+  },
+  deepseek: {
+    name: "deepseek",
+    baseUrl: "https://api.deepseek.com",
+    keyEnv: "DEEPSEEK_API_KEY",
+  },
+};
+function providerFor(model: string): Provider {
+  if (model.startsWith("deepseek")) return PROVIDERS.deepseek;
+  return PROVIDERS.gemini; // default: gemini-*
+}
 
 // Model ids centralizados. Os `gemini-2.5-*` foram descontinuados para chaves
 // novas (404 "not available to new users") — não reintroduzir.
 // FLASH: alto volume (análise, busca). PRO: relatórios executivos.
 export const MODEL_FLASH = "gemini-3.5-flash";
 export const MODEL_PRO = "gemini-3.1-pro-preview";
+// DeepSeek (OpenAI-compat, barato) — ideal p/ micro-análise em volume. Ativado só quando
+// DEEPSEEK_API_KEY existe; ajuste o id exato ("v4"/deepseek-chat) ao provisionar a chave.
+export const MODEL_DEEPSEEK = "deepseek-chat";
 
 export type AiMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -49,8 +71,14 @@ export class AiGatewayError extends Error {
   }
 }
 
-/** One HTTP attempt against a single model. Throws AiGatewayError (status 0 = network/timeout). */
-async function callAiOnce(model: string, apiKey: string, opts: AiCallOptions): Promise<AiResult> {
+/** One HTTP attempt against a single model. Throws AiGatewayError.
+ *  status 0 = network/timeout (transient); status -1 = provider unconfigured (skip to next model). */
+async function callAiOnce(model: string, opts: AiCallOptions): Promise<AiResult> {
+  const provider = providerFor(model);
+  const apiKey = process.env[provider.keyEnv];
+  if (!apiKey) {
+    throw new AiGatewayError(-1, `Provedor ${provider.name} sem chave (${provider.keyEnv}).`);
+  }
   const body: Record<string, unknown> = { model, messages: opts.messages };
   if (opts.temperature !== undefined) body.temperature = opts.temperature;
   if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens;
@@ -60,7 +88,7 @@ async function callAiOnce(model: string, apiKey: string, opts: AiCallOptions): P
   const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(GEMINI_URL, {
+    res = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
@@ -103,10 +131,6 @@ async function callAiOnce(model: string, apiKey: string, opts: AiCallOptions): P
  * to the next fallback model. This is what keeps analysis and reports from dying on a blip.
  */
 export async function callAi(opts: AiCallOptions): Promise<AiResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new AiGatewayError(500, "GEMINI_API_KEY não está configurada.");
-  }
   const models = [opts.model ?? MODEL_FLASH, ...(opts.fallbackModels ?? [])];
   const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   let lastError: unknown;
@@ -114,11 +138,12 @@ export async function callAi(opts: AiCallOptions): Promise<AiResult> {
   for (const model of models) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        return await callAiOnce(model, apiKey, opts);
+        return await callAiOnce(model, opts);
       } catch (e) {
         lastError = e;
         const status = e instanceof AiGatewayError ? e.status : 0;
         if (status === 401 || status === 403) throw e; // key problem — no retry, no fallback helps
+        if (status === -1) break; // provider unconfigured — skip straight to next fallback model
         const transient = status === 0 || TRANSIENT_STATUS.has(status);
         if (transient && attempt < maxAttempts) {
           await sleep(400 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
