@@ -27,8 +27,9 @@ function providerFor(model: string): Provider {
 // FLASH: alto volume (análise, busca). PRO: relatórios executivos.
 export const MODEL_FLASH = "gemini-3.5-flash";
 export const MODEL_PRO = "gemini-3.1-pro-preview";
-// DeepSeek (OpenAI-compat, barato) — ideal p/ micro-análise em volume. Ativado só quando
-// DEEPSEEK_API_KEY existe; ajuste o id exato ("v4"/deepseek-chat) ao provisionar a chave.
+// DeepSeek V4 Flash (OpenAI-compat) — ~17× mais barato que o Gemini 3.5 Flash na micro-análise
+// (output $0.28 vs $9.00 /1M, jul/2026) → motor PRIMÁRIO da micro-análise quando a chave existir.
+// `deepseek-chat` mapeia para `deepseek-v4-flash` (não-thinking) a partir de 2026-07-24.
 export const MODEL_DEEPSEEK = "deepseek-chat";
 
 export type AiMessage = { role: "system" | "user" | "assistant"; content: string };
