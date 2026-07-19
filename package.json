@@ -14,7 +14,9 @@
     "test:smoke": "bun scripts/smoke-v2.mjs",
     "test:reports": "bun scripts/test-report-fallback.mjs",
     "test:ai": "bun scripts/test-ai-gateway.mjs",
-    "test": "bun scripts/test-ai-gateway.mjs && bun scripts/test-report-fallback.mjs"
+    "test:web-search": "bun scripts/test-web-search.mjs",
+    "test:micro": "bun scripts/test-micro-heuristics.mjs",
+    "test": "bun scripts/test-ai-gateway.mjs && bun scripts/test-report-fallback.mjs && bun scripts/test-web-search.mjs && bun scripts/test-micro-heuristics.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -2,6 +2,8 @@
 // Falls back to noop if FIRECRAWL_API_KEY isn't linked (connector not configured).
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { googleSearch } from "@/lib/web-search.server";
+import { extractReadable } from "@/lib/readability.server";
 import { createHash } from "crypto";
 
 const FIRECRAWL = "https://api.firecrawl.dev/v2";
@@ -73,10 +75,45 @@ function externalId(url: string): string {
   return createHash("sha256").update(url).digest("hex").slice(0, 40);
 }
 
+/** Descobre URLs candidatas para uma query: Firecrawl `/search` primário; se ele lançar ou
+ *  a chave não estiver configurada, cai para o Google Custom Search (mesma query). Se nenhum
+ *  provedor estiver configurado, retorna [] silenciosamente (noop, como hoje). */
+async function discoverUrls(query: string, limit: number): Promise<FirecrawlSearchResult[]> {
+  if (process.env.FIRECRAWL_API_KEY) {
+    try {
+      return await firecrawlSearch(query, limit);
+    } catch (e) {
+      console.warn(`discoverUrls: Firecrawl falhou para "${query}", caindo para Google:`, e);
+    }
+  }
+  const google = await googleSearch(query, limit);
+  return google.map((g) => ({ url: g.url, title: g.title, description: g.snippet }));
+}
+
+/** Extrai conteúdo de uma URL: Firecrawl `/scrape` primário; se retornar null ou lançar,
+ *  cai para o fallback local (fetch + strip de HTML) — nunca perde a URL por falha pontual
+ *  de um provedor. */
+async function extractContent(url: string): Promise<{ markdown?: string; title?: string } | null> {
+  if (process.env.FIRECRAWL_API_KEY) {
+    try {
+      const r = await firecrawlScrape(url);
+      if (r?.markdown) return r;
+    } catch (e) {
+      console.warn(
+        `extractContent: Firecrawl scrape falhou para ${url}, caindo para readability:`,
+        e,
+      );
+    }
+  }
+  return extractReadable(url);
+}
+
 export async function scanNewsForOrg(
   orgId: string,
 ): Promise<{ inserted: number; queries: number }> {
-  if (!process.env.FIRECRAWL_API_KEY) return { inserted: 0, queries: 0 };
+  const hasFirecrawl = Boolean(process.env.FIRECRAWL_API_KEY);
+  const hasGoogle = Boolean(process.env.GOOGLE_API_KEY && process.env.GOOGLE_CSE_ID);
+  if (!hasFirecrawl && !hasGoogle) return { inserted: 0, queries: 0 };
   // Build queries from org_vocabulary: city/facility/opponent terms + neighborhood
   const { data: vocab } = await supabaseAdmin
     .from("org_vocabulary")
@@ -134,7 +171,7 @@ export async function scanNewsForOrg(
   let queries = 0;
   for (const q of queriesToRun) {
     queries++;
-    const results = await firecrawlSearch(q, SEARCH_LIMIT);
+    const results = await discoverUrls(q, SEARCH_LIMIT);
     for (const r of results) {
       if (!r.url) continue;
       if (!candidates.has(r.url)) candidates.set(r.url, r);
@@ -163,7 +200,7 @@ export async function scanNewsForOrg(
     const r = candidates.get(url)!;
     let content = [r.title, r.description].filter(Boolean).join("\n\n");
     if (scraped < MAX_SCRAPES) {
-      const s = await firecrawlScrape(url);
+      const s = await extractContent(url);
       scraped++;
       if (s?.markdown)
         content = [r.title ?? s.title, r.description, s.markdown].filter(Boolean).join("\n\n");

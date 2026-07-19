@@ -4,7 +4,8 @@
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { createHash } from "crypto";
-import { analyzeBatch, type VocabularyContext } from "./analysis.server";
+import { analyzeBatch, type VocabularyContext, type AnalysisOutput } from "./analysis.server";
+import { preClassify, type VocabMatches } from "./micro-heuristics";
 
 export interface EvolutionMessagePayload {
   key?: { id?: string; remoteJid?: string; fromMe?: boolean; participant?: string };
@@ -306,80 +307,33 @@ export async function runAnalysisForMessages(orgId: string, messageIds: string[]
     }),
   );
 
-  // Chunk to avoid overflowing the model's context
+  // L0 — filtro matemático: classifica por regra as mensagens inequívocas (custo ZERO de IA);
+  // as ambíguas seguem pra IA (DeepSeek). Piso determinístico: nada fica sem classificação.
+  const aiInputs: typeof inputs = [];
+  const l0Rows: AnalysisRow[] = [];
+  for (const inp of inputs) {
+    const matches = matchVocabulary(inp.content, vocabRows) as VocabMatches;
+    const msg = msgById.get(inp.id);
+    const pre = preClassify(inp.content, matches, msg?.sourceKind ?? null);
+    if (pre)
+      l0Rows.push(buildAnalysisRow(orgId, { id: inp.id, ...pre }, msg, vocabRows, "heuristic-L0"));
+    else aiInputs.push(inp);
+  }
+  if (l0Rows.length > 0) await persistAnalysisRows(orgId, l0Rows);
+
+  // IA (DeepSeek primário) só para o que o L0 NÃO resolveu, em chunks. Falha de chunk marca só
+  // aquele slice como "error" (reprocessado no próximo ciclo — ver runAnalysisForPendingMessages).
   const CHUNK = 12;
-  for (let i = 0; i < inputs.length; i += CHUNK) {
-    const slice = inputs.slice(i, i + CHUNK);
+  for (let i = 0; i < aiInputs.length; i += CHUNK) {
+    const slice = aiInputs.slice(i, i + CHUNK);
     try {
       const { results, model } = await analyzeBatch(vocab, slice);
       const rows = results
-        // Only keep results whose id maps to a real message in THIS slice — the model can
-        // hallucinate/duplicate ids, and a bogus message_id would FK-poison the whole upsert
-        // and wrongly mark every valid message in the chunk as "error".
+        // Only keep results whose id maps to a real message — the model can hallucinate/duplicate
+        // ids, and a bogus message_id would FK-poison the whole upsert and wrongly error the chunk.
         .filter((r) => r && r.id && msgById.has(r.id))
-        .map((r) => {
-          const msg = msgById.get(r.id);
-          const matches = matchVocabulary(msg?.content ?? "", vocabRows);
-          const matchedEntities = uniq([
-            ...matches.department,
-            ...matches.facility,
-            ...matches.sensitive_term,
-            ...matches.focus_term,
-          ]);
-          const fallbackTopic =
-            matches.focus_term[0] ?? matches.sensitive_term[0] ?? matches.facility[0];
-          const hasPriorityTerm =
-            matches.focus_term.length > 0 || matches.sensitive_term.length > 0;
-          const isExternal =
-            msg?.sourceKind === "news" ||
-            msg?.sourceKind === "instagram" ||
-            msg?.sourceKind === "facebook" ||
-            msg?.sourceKind === "x";
-
-          return {
-            org_id: orgId,
-            message_id: r.id,
-            sentiment: Math.max(-1, Math.min(1, Number(r.sentiment ?? 0))),
-            intensity: Math.max(0, Math.min(1, Number(r.intensity ?? 0))),
-            topic:
-              r.topic && r.topic !== "outros"
-                ? r.topic
-                : fallbackTopic
-                  ? slugTopic(fallbackTopic)
-                  : "outros",
-            subtopic: r.subtopic ?? fallbackTopic ?? null,
-            neighborhood:
-              r.neighborhood ?? matches.neighborhood[0] ?? msg?.groupNeighborhood ?? null,
-            mentioned_opponents: uniq([...(r.mentioned_opponents ?? []), ...matches.opponent]),
-            mentioned_allies: uniq([...(r.mentioned_allies ?? []), ...matches.ally]),
-            mentioned_entities: uniq([...(r.mentioned_entities ?? []), ...matchedEntities]),
-            is_actionable: !!r.is_actionable || hasPriorityTerm || isExternal,
-            risk_score: Math.max(
-              0,
-              Math.min(
-                100,
-                Math.round(Number(r.risk_score ?? 0)) +
-                  (hasPriorityTerm ? 8 : 0) +
-                  (isExternal ? 5 : 0),
-              ),
-            ),
-            summary: r.summary ?? null,
-            model_version: model,
-          };
-        });
-      if (rows.length > 0) {
-        await supabaseAdmin
-          .from("message_analyses")
-          .upsert(rows, { onConflict: "message_id", ignoreDuplicates: false });
-        await supabaseAdmin
-          .from("raw_messages")
-          .update({ analysis_status: "done" })
-          .in(
-            "id",
-            rows.map((r) => r.message_id),
-          );
-        await rollupTopicsAndAlerts(orgId, rows);
-      }
+        .map((r) => buildAnalysisRow(orgId, r, msgById.get(r.id), vocabRows, model));
+      if (rows.length > 0) await persistAnalysisRows(orgId, rows);
     } catch (e) {
       console.error("analyzeBatch failed", e);
       await supabaseAdmin
@@ -391,6 +345,79 @@ export async function runAnalysisForMessages(orgId: string, messageIds: string[]
         );
     }
   }
+}
+
+type MsgMeta = { content: string; groupNeighborhood: string | null; sourceKind: string | null };
+
+/** Combina a saída da análise (IA ou L0) com o casamento de vocabulário → linha message_analyses.
+ *  Clampa faixas e mescla entidades/bairro/adversários do vocabulário. `model` vai em model_version. */
+function buildAnalysisRow(
+  orgId: string,
+  r: AnalysisOutput,
+  msg: MsgMeta | undefined,
+  vocabRows: VocabularyRow[],
+  model: string,
+) {
+  const matches = matchVocabulary(msg?.content ?? "", vocabRows);
+  const matchedEntities = uniq([
+    ...matches.department,
+    ...matches.facility,
+    ...matches.sensitive_term,
+    ...matches.focus_term,
+  ]);
+  const fallbackTopic = matches.focus_term[0] ?? matches.sensitive_term[0] ?? matches.facility[0];
+  const hasPriorityTerm = matches.focus_term.length > 0 || matches.sensitive_term.length > 0;
+  const isExternal =
+    msg?.sourceKind === "news" ||
+    msg?.sourceKind === "instagram" ||
+    msg?.sourceKind === "facebook" ||
+    msg?.sourceKind === "x";
+
+  return {
+    org_id: orgId,
+    message_id: r.id,
+    sentiment: Math.max(-1, Math.min(1, Number(r.sentiment ?? 0))),
+    intensity: Math.max(0, Math.min(1, Number(r.intensity ?? 0))),
+    topic:
+      r.topic && r.topic !== "outros"
+        ? r.topic
+        : fallbackTopic
+          ? slugTopic(fallbackTopic)
+          : "outros",
+    subtopic: r.subtopic ?? fallbackTopic ?? null,
+    neighborhood: r.neighborhood ?? matches.neighborhood[0] ?? msg?.groupNeighborhood ?? null,
+    mentioned_opponents: uniq([...(r.mentioned_opponents ?? []), ...matches.opponent]),
+    mentioned_allies: uniq([...(r.mentioned_allies ?? []), ...matches.ally]),
+    mentioned_entities: uniq([...(r.mentioned_entities ?? []), ...matchedEntities]),
+    is_actionable: !!r.is_actionable || hasPriorityTerm || isExternal,
+    risk_score: Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(Number(r.risk_score ?? 0)) + (hasPriorityTerm ? 8 : 0) + (isExternal ? 5 : 0),
+      ),
+    ),
+    summary: r.summary ?? null,
+    model_version: model,
+  };
+}
+
+type AnalysisRow = ReturnType<typeof buildAnalysisRow>;
+
+/** Persiste um lote de linhas: upsert + marca mensagens como analisadas + rollup de temas/alertas. */
+async function persistAnalysisRows(orgId: string, rows: AnalysisRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  await supabaseAdmin
+    .from("message_analyses")
+    .upsert(rows, { onConflict: "message_id", ignoreDuplicates: false });
+  await supabaseAdmin
+    .from("raw_messages")
+    .update({ analysis_status: "done" })
+    .in(
+      "id",
+      rows.map((r) => r.message_id),
+    );
+  await rollupTopicsAndAlerts(orgId, rows);
 }
 
 export async function runAnalysisForPendingMessages(
