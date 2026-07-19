@@ -143,8 +143,10 @@ export async function callAi(opts: AiCallOptions): Promise<AiResult> {
       } catch (e) {
         lastError = e;
         const status = e instanceof AiGatewayError ? e.status : 0;
-        if (status === 401 || status === 403) throw e; // key problem — no retry, no fallback helps
-        if (status === -1) break; // provider unconfigured — skip straight to next fallback model
+        // Provider unusable (missing key -1, or bad/forbidden key 401/403): skip straight to the
+        // next fallback model — which may be a DIFFERENT provider with a valid key. If none is
+        // left, the loop ends and throws lastError. (Retrying the same model wouldn't help.)
+        if (status === -1 || status === 401 || status === 403) break;
         const transient = status === 0 || TRANSIENT_STATUS.has(status);
         if (transient && attempt < maxAttempts) {
           await sleep(400 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));

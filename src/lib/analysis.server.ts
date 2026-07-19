@@ -2,7 +2,7 @@
 // Takes a batch of raw messages + the org vocabulary and produces
 // structured insight rows for message_analyses.
 
-import { callAiJson, AiGatewayError, MODEL_FLASH } from "./ai-gateway.server";
+import { callAiJson, AiGatewayError, MODEL_FLASH, MODEL_DEEPSEEK } from "./ai-gateway.server";
 
 export interface VocabularyContext {
   neighborhoods: string[];
@@ -55,7 +55,10 @@ Regras:
 export async function analyzeBatch(
   vocab: VocabularyContext,
   messages: AnalysisInput[],
-  model = MODEL_FLASH,
+  // Micro-análise em volume: DeepSeek V4 Flash é ~17× mais barato que o Gemini Flash e roda como
+  // primário. Sem DEEPSEEK_API_KEY, o gateway pula e usa o fallback (Gemini) — comportamento
+  // idêntico ao anterior, sem quebrar nada.
+  model = MODEL_DEEPSEEK,
 ): Promise<{ results: AnalysisOutput[]; model: string }> {
   if (messages.length === 0) return { results: [], model };
 
@@ -95,6 +98,7 @@ Responda com JSON exatamente neste formato:
   try {
     const parsed = await callAiJson<{ results: AnalysisOutput[] }>({
       model,
+      fallbackModels: model === MODEL_FLASH ? undefined : [MODEL_FLASH],
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
