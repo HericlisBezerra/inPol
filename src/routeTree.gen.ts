@@ -30,6 +30,7 @@ import { Route as V2AlertasRouteImport } from './routes/v2/alertas'
 import { Route as SiteTermosRouteImport } from './routes/site/termos'
 import { Route as SitePrivacidadeRouteImport } from './routes/site/privacidade'
 import { Route as SiteLgpdRouteImport } from './routes/site/lgpd'
+import { Route as RTokenRouteImport } from './routes/r.$token'
 import { Route as AuthenticatedTerritoryRouteImport } from './routes/_authenticated/territory'
 import { Route as AuthenticatedSourcesRouteImport } from './routes/_authenticated/sources'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -173,6 +174,11 @@ const SiteLgpdRoute = SiteLgpdRouteImport.update({
   id: '/lgpd',
   path: '/lgpd',
   getParentRoute: () => SiteRouteRoute,
+} as any)
+const RTokenRoute = RTokenRouteImport.update({
+  id: '/r/$token',
+  path: '/r/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedTerritoryRoute = AuthenticatedTerritoryRouteImport.update({
   id: '/territory',
@@ -405,6 +411,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/territory': typeof AuthenticatedTerritoryRoute
+  '/r/$token': typeof RTokenRoute
   '/site/lgpd': typeof SiteLgpdRoute
   '/site/privacidade': typeof SitePrivacidadeRoute
   '/site/termos': typeof SiteTermosRoute
@@ -463,6 +470,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/sources': typeof AuthenticatedSourcesRoute
   '/territory': typeof AuthenticatedTerritoryRoute
+  '/r/$token': typeof RTokenRoute
   '/site/lgpd': typeof SiteLgpdRoute
   '/site/privacidade': typeof SitePrivacidadeRoute
   '/site/termos': typeof SiteTermosRoute
@@ -523,6 +531,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/sources': typeof AuthenticatedSourcesRoute
   '/_authenticated/territory': typeof AuthenticatedTerritoryRoute
+  '/r/$token': typeof RTokenRoute
   '/site/lgpd': typeof SiteLgpdRoute
   '/site/privacidade': typeof SitePrivacidadeRoute
   '/site/termos': typeof SiteTermosRoute
@@ -586,6 +595,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sources'
     | '/territory'
+    | '/r/$token'
     | '/site/lgpd'
     | '/site/privacidade'
     | '/site/termos'
@@ -644,6 +654,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sources'
     | '/territory'
+    | '/r/$token'
     | '/site/lgpd'
     | '/site/privacidade'
     | '/site/termos'
@@ -703,6 +714,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/sources'
     | '/_authenticated/territory'
+    | '/r/$token'
     | '/site/lgpd'
     | '/site/privacidade'
     | '/site/termos'
@@ -751,6 +763,7 @@ export interface RootRouteChildren {
   SairRoute: typeof SairRoute
   V2AdminRoute: typeof V2AdminRoute
   V2EleicaoRoute: typeof V2EleicaoRoute
+  RTokenRoute: typeof RTokenRoute
   ApiPublicHooksAnalyzePendingRoute: typeof ApiPublicHooksAnalyzePendingRoute
   ApiPublicHooksBackfillWhatsappRoute: typeof ApiPublicHooksBackfillWhatsappRoute
   ApiPublicHooksDetectAlertsRoute: typeof ApiPublicHooksDetectAlertsRoute
@@ -909,6 +922,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/site/lgpd'
       preLoaderRoute: typeof SiteLgpdRouteImport
       parentRoute: typeof SiteRouteRoute
+    }
+    '/r/$token': {
+      id: '/r/$token'
+      path: '/r/$token'
+      fullPath: '/r/$token'
+      preLoaderRoute: typeof RTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/territory': {
       id: '/_authenticated/territory'
@@ -1367,6 +1387,7 @@ const rootRouteChildren: RootRouteChildren = {
   SairRoute: SairRoute,
   V2AdminRoute: V2AdminRoute,
   V2EleicaoRoute: V2EleicaoRoute,
+  RTokenRoute: RTokenRoute,
   ApiPublicHooksAnalyzePendingRoute: ApiPublicHooksAnalyzePendingRoute,
   ApiPublicHooksBackfillWhatsappRoute: ApiPublicHooksBackfillWhatsappRoute,
   ApiPublicHooksDetectAlertsRoute: ApiPublicHooksDetectAlertsRoute,

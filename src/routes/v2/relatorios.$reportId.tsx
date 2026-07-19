@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/v2/relatorios/$reportId")({
@@ -25,23 +25,37 @@ const REPORT_HEADERS: Record<string, { kicker: string; title: string }> = {
 function Screen() {
   const { reportId } = Route.useParams();
   const header = REPORT_HEADERS[reportId] ?? REPORT_HEADERS["diario-18-jul"];
+  const [shareOpen, setShareOpen] = useState(false);
 
   return (
     <div className="mx-auto w-full max-w-[780px]">
       {/* Top bar: back + export */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Link to="/v2/relatorios" className="text-[13px] text-v2-ink-3 hover:text-v2-ink">
           ← Relatórios
         </Link>
-        <div className="flex gap-2">
-          <button className="rounded-lg border border-v2-line-strong bg-v2-card px-[13px] py-[7px] text-[12.5px] font-[650] text-v2-ink">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg border border-v2-line-strong bg-v2-card px-[13px] py-[7px] text-[12.5px] font-[650] text-v2-ink transition-colors hover:border-v2-ink-3"
+          >
             ⇩ PDF
           </button>
           <button className="rounded-lg border border-v2-line-strong bg-v2-card px-[13px] py-[7px] text-[12.5px] font-[650] text-v2-ink">
             Enviar no WhatsApp
           </button>
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="rounded-lg bg-v2-green px-[13px] py-[7px] text-[12.5px] font-[650] text-white transition-colors hover:bg-v2-green-hover"
+          >
+            Compartilhar publicamente
+          </button>
         </div>
       </div>
+
+      {shareOpen && <ShareModal onClose={() => setShareOpen(false)} />}
 
       {/* Kicker + title (leitura executiva: serifa Fraunces) */}
       <div className="mt-[18px]">
@@ -212,6 +226,121 @@ function Screen() {
       {/* Footer meta */}
       <div className="mt-[18px] text-center font-mono text-[11px] text-v2-faint">
         gerado por Inpol IA · 18 jul 08:00 · fontes: 142 grupos, 8 portais, 12 perfis
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de compartilhamento público (estado demo).
+ * TODO(cutover): ligar em createReportShare/revokeReportShare de "@/lib/reports-share.functions".
+ */
+function ShareModal({ onClose }: { onClose: () => void }) {
+  const [active, setActive] = useState(true); // demo: link já ativo
+  const [copied, setCopied] = useState(false);
+  const publicUrl = "https://inpolapp.com/r/demo";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard indisponível — o campo permite seleção manual */
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(33,31,28,0.45)] px-4 print:hidden"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-modal-title"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[440px] rounded-2xl border border-v2-line bg-v2-card p-6 shadow-[0_12px_40px_rgba(33,31,28,0.18)]"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <h2 id="share-modal-title" className="font-display text-[19px] font-[650] text-v2-ink">
+            Compartilhar publicamente
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar"
+            className="-mr-1 -mt-1 rounded-lg p-1.5 text-[16px] leading-none text-v2-ink-3 hover:bg-v2-track hover:text-v2-ink"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Aviso LGPD — destacado */}
+        <div className="mt-4 rounded-xl border border-v2-warn-strong/40 bg-v2-warn-bg px-4 py-3.5">
+          <div className="font-mono text-[10.5px] font-bold tracking-[0.1em] text-v2-warn">
+            ⚠️ LINK PÚBLICO
+          </div>
+          <p className="mt-1.5 text-[13px] leading-[1.55] text-v2-ink">
+            Qualquer pessoa com o link vê este relatório,{" "}
+            <b>incluindo citações de mensagens de cidadãos</b>. Compartilhe só o que puder ser
+            público.
+          </p>
+        </div>
+
+        {active ? (
+          <>
+            <label
+              htmlFor="share-public-url"
+              className="mt-5 block font-mono text-[10.5px] font-semibold tracking-[0.1em] text-v2-ink-3"
+            >
+              LINK PÚBLICO
+            </label>
+            <div className="mt-1.5 flex gap-2">
+              <input
+                id="share-public-url"
+                readOnly
+                value={publicUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-lg border border-v2-line-strong bg-v2-surface px-3 py-2 font-mono text-[12.5px] text-v2-ink"
+              />
+              <button
+                type="button"
+                onClick={copy}
+                className="flex-none rounded-lg bg-v2-green px-3.5 py-2 text-[12.5px] font-[650] text-white transition-colors hover:bg-v2-green-hover"
+              >
+                {copied ? "Copiado ✓" : "Copiar"}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActive(false)}
+              className="mt-4 w-full rounded-lg border border-v2-crit/40 bg-v2-crit-bg px-3 py-2 text-[12.5px] font-[650] text-v2-crit transition-colors hover:border-v2-crit"
+            >
+              Revogar acesso
+            </button>
+          </>
+        ) : (
+          <div className="mt-5 rounded-xl border border-v2-line bg-v2-track px-4 py-4 text-center">
+            <p className="text-[13px] font-[600] text-v2-ink">Acesso revogado.</p>
+            <p className="mt-1 text-[12.5px] text-v2-ink-3">O link anterior deixou de funcionar.</p>
+            <button
+              type="button"
+              onClick={() => setActive(true)}
+              className="mt-3 rounded-lg border border-v2-line-strong bg-v2-card px-3.5 py-2 text-[12.5px] font-[650] text-v2-ink hover:border-v2-ink-3"
+            >
+              Gerar novo link
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
