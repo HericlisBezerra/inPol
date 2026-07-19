@@ -40,6 +40,20 @@ function isPrivateV4(ip: string): boolean {
   });
 }
 
+/** Extrai o IPv4 embutido de um endereço IPv4-mapeado (::ffff:1.2.3.4 ou ::ffff:0102:0304). */
+function mappedV4(ip6: string): string | null {
+  const lower = ip6.toLowerCase();
+  const dotted = lower.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (dotted) return dotted[1];
+  const hex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1], 16);
+    const lo = parseInt(hex[2], 16);
+    return `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
+  }
+  return null;
+}
+
 function isPrivateV6(ip: string): boolean {
   const lower = ip.toLowerCase();
   return (
@@ -47,19 +61,21 @@ function isPrivateV6(ip: string): boolean {
     lower === "::" ||
     lower.startsWith("fe80:") || // link-local
     lower.startsWith("fc") || // unique local fc00::/7
-    lower.startsWith("fd") ||
-    lower.startsWith("::ffff:127.") ||
-    lower.startsWith("::ffff:10.") ||
-    lower.startsWith("::ffff:169.254.")
+    lower.startsWith("fd")
   );
 }
 
 function isPrivateIp(ip: string): boolean {
-  return isIP(ip) === 6 ? isPrivateV6(ip) : isPrivateV4(ip);
+  const clean = ip.replace(/^\[|\]$/g, ""); // remove colchetes de literais IPv6
+  if (isIP(clean) === 6) {
+    const v4 = mappedV4(clean); // IPv4-mapeado (::ffff:192.168.x.x) roteia p/ IPv4 → checar como v4
+    return v4 ? isPrivateV4(v4) : isPrivateV6(clean);
+  }
+  return isPrivateV4(clean);
 }
 
 function isBlockedHostname(hostname: string): boolean {
-  const h = hostname.toLowerCase();
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, ""); // URL hostname vem com [] em IPv6
   if (h === "localhost" || h.endsWith(".localhost")) return true;
   if (h.endsWith(".local")) return true;
   if (h === "metadata.google.internal") return true;
@@ -81,15 +97,22 @@ async function assertSafeUrl(rawUrl: string): Promise<URL> {
   if (isBlockedHostname(parsed.hostname)) {
     throw new Error(`Host bloqueado (privado/local): ${parsed.hostname}`);
   }
-  if (!isIP(parsed.hostname)) {
+  const cleanHost = parsed.hostname.replace(/^\[|\]$/g, "");
+  if (!isIP(cleanHost)) {
+    // Valida TODOS os endereços resolvidos (um host pode ter A público + AAAA privado). Nota:
+    // o fetch re-resolve o DNS por conta própria — resta um resíduo teórico de DNS-rebinding
+    // (TTL baixo). Aceitável aqui: as URLs vêm de provedores de busca (Firecrawl/Google),
+    // não de entrada arbitrária do usuário. Pinar o IP exigiria um agente HTTP customizado.
+    let addrs: Array<{ address: string }>;
     try {
-      const { address } = await dnsLookup(parsed.hostname);
+      addrs = await dnsLookup(cleanHost, { all: true });
+    } catch {
+      throw new Error(`Falha ao resolver DNS de ${cleanHost}`);
+    }
+    for (const { address } of addrs) {
       if (isPrivateIp(address)) {
-        throw new Error(`Host resolve para IP privado: ${parsed.hostname} -> ${address}`);
+        throw new Error(`Host resolve para IP privado: ${cleanHost} -> ${address}`);
       }
-    } catch (e) {
-      if (e instanceof Error && e.message.includes("IP privado")) throw e;
-      throw new Error(`Falha ao resolver DNS de ${parsed.hostname}`);
     }
   }
   return parsed;
@@ -166,11 +189,28 @@ export async function extractReadable(url: string): Promise<ReadableContent | nu
       }
 
       if (!res.ok) return null;
-      const buf = await res.arrayBuffer();
-      if (buf.byteLength > MAX_BYTES) {
+      // Lê em stream com teto de bytes — uma página maliciosa gigante não estoura a memória.
+      const reader = res.body?.getReader();
+      if (!reader) {
+        const buf = await res.arrayBuffer();
         html = new TextDecoder().decode(buf.slice(0, MAX_BYTES));
       } else {
-        html = new TextDecoder().decode(buf);
+        const chunks: Uint8Array[] = [];
+        let total = 0;
+        while (total < MAX_BYTES) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          total += value.byteLength;
+        }
+        await reader.cancel().catch(() => {});
+        const out = new Uint8Array(total);
+        let off = 0;
+        for (const c of chunks) {
+          out.set(c, off);
+          off += c.byteLength;
+        }
+        html = new TextDecoder().decode(out.slice(0, MAX_BYTES));
       }
       break;
     }

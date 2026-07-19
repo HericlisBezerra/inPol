@@ -110,35 +110,10 @@ export const searchWeb = createServerFn({ method: "POST" })
       }));
     }
 
+    // Sem Google configurado: NÃO cair pro LLM (inventaria URLs — exatamente o que este
+    // workstream veio eliminar). Retorna vazio; busca web real exige GOOGLE_API_KEY + GOOGLE_CSE_ID.
     console.warn(
-      "searchWeb: GOOGLE_API_KEY/GOOGLE_CSE_ID não configurados — usando busca via LLM sem grounding (risco de URL inventada).",
+      "searchWeb: GOOGLE_API_KEY/GOOGLE_CSE_ID não configurados — busca web real indisponível (retornando vazio em vez de URLs inventadas pelo LLM).",
     );
-    const { callAi, MODEL_FLASH } = await import("@/lib/ai-gateway.server");
-    const prompt = `Busque na imprensa local (domínios sugeridos: ${domainList || "tribunadejundiai.com.br, bomdiajundiai.com.br, g1.globo.com"}) por: "${data.q}"
-
-Responda com até 8 resultados em JSON estrito:
-{"results":[{"title":"...","url":"...","snippet":"...","source":"..."}]}
-
-Se não souber de fato, retorne {"results":[]}. Não invente URLs.`;
-    try {
-      const { text } = await callAi({
-        model: MODEL_FLASH,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Você é um buscador de imprensa. Use apenas conhecimento factual; nunca invente URLs ou notícias.",
-          },
-          { role: "user", content: prompt },
-        ],
-        jsonObject: true,
-        temperature: 0.1,
-      });
-      const parsed = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, "")) as {
-        results?: Array<{ title: string; url: string; snippet: string; source?: string }>;
-      };
-      return parsed.results ?? [];
-    } catch {
-      return [];
-    }
+    return [];
   });

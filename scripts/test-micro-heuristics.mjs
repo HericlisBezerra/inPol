@@ -80,5 +80,20 @@ ok(
   "pergunta neutra -> null",
 );
 
+// 9) sarcasmo (positivo + palavra de problema) -> null (misto, "fechada" agora no léxico negativo)
+ok(
+  preClassify("Excelente, mais uma creche fechada, ótimo trabalho da gestão", M(), "whatsapp") ===
+    null,
+  "sarcasmo elogioso -> defere pra IA (null)",
+);
+
+// 10) sem double-count: negativo com foco -> risco BASE 45 (boosts só em buildAnalysisRow)
+const r10 = preClassify(
+  "A enchente na Vila Rami de novo, um descaso, um absurdo total",
+  M({ neighborhood: ["Vila Rami"], focus_term: ["enchente"] }),
+  "whatsapp",
+);
+ok(r10 && r10.risk_score === 45, "risco BASE (45), sem reaplicar boost de foco no L0");
+
 console.log(`\n${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);

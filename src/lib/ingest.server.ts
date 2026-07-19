@@ -380,7 +380,7 @@ function buildAnalysisRow(
     intensity: Math.max(0, Math.min(1, Number(r.intensity ?? 0))),
     topic:
       r.topic && r.topic !== "outros"
-        ? r.topic
+        ? slugTopic(r.topic) // slug tanto no caminho de IA quanto no L0 → rollup não fragmenta
         : fallbackTopic
           ? slugTopic(fallbackTopic)
           : "outros",

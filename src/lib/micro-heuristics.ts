@@ -81,6 +81,26 @@ const NEG = [
   "nao aguento",
   "pessimo servico",
   "total descaso",
+  "fechada",
+  "fechou",
+  "fechado",
+  "cancelou",
+  "cancelado",
+  "atrasou",
+  "atraso",
+  "atrasado",
+  "suspenso",
+  "suspensa",
+  "faltou",
+  "interditado",
+  "interditada",
+  "quebrado",
+  "quebrada",
+  "acabou",
+  "nao funciona",
+  "nao tem",
+  "sem luz",
+  "sem agua",
 ];
 const POS = [
   "otimo",
@@ -210,16 +230,24 @@ const TOPICS: Array<{ topic: string; words: string[] }> = [
 function normalize(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+// Fronteira de palavra (como matchVocabulary) — evita casar "top" dentro de "utopico".
+function termHit(norm: string, term: string): boolean {
+  return new RegExp(`(^|[^a-z0-9])${escapeRe(term)}([^a-z0-9]|$)`).test(norm);
+}
 function countHits(norm: string, words: string[]): number {
   let n = 0;
-  for (const w of words) if (norm.includes(w)) n++;
+  for (const w of words) if (termHit(norm, w)) n++;
   return n;
 }
 function uniq<T>(a: T[]): T[] {
   return [...new Set(a)];
 }
 function detectTopic(norm: string, matches: VocabMatches): string | null {
-  for (const t of TOPICS) if (countHits(norm, t.words) > 0) return t.topic;
+  // Substring aqui de propósito: TOPICS usa prefixos ("alag"→alagou/alagamento, "inunda", "transbord").
+  for (const t of TOPICS) if (t.words.some((w) => norm.includes(w))) return t.topic;
   // Sem palavra-chave direta, um equipamento/depto do vocabulário dá uma pista fraca de tema:
   if (matches.facility.length > 0 || matches.department.length > 0) return "servicos_publicos";
   return null;
@@ -261,11 +289,10 @@ export function preClassify(
   const hasSensitive = matches.sensitive_term.length > 0;
   const hasFocus = matches.focus_term.length > 0;
 
-  let risk = sentiment < 0 ? 45 + (neg >= 4 ? 20 : 0) : 5;
-  if (hasSensitive) risk += 10;
-  if (hasFocus) risk += 8;
-  if (isExternal) risk += 5;
-  risk = Math.max(0, Math.min(100, Math.round(risk)));
+  // Risco BASE apenas. Os boosts (sensitive/focus/external) são aplicados UMA vez em
+  // buildAnalysisRow (ingest.server.ts), igual ao caminho de IA — não reaplicar aqui (senão
+  // as linhas L0 inflariam o risco e cruzariam o limiar de alerta indevidamente).
+  const risk = Math.max(0, Math.min(100, sentiment < 0 ? 45 + (neg >= 4 ? 20 : 0) : 5));
 
   const intensity = Math.min(
     1,
