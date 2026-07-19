@@ -2,7 +2,7 @@
 // Falls back to noop if FIRECRAWL_API_KEY isn't linked (connector not configured).
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { googleSearch } from "@/lib/web-search.server";
+import { googleSearch, groundedSearch } from "@/lib/web-search.server";
 import { extractReadable } from "@/lib/readability.server";
 import { createHash } from "crypto";
 
@@ -75,17 +75,23 @@ function externalId(url: string): string {
   return createHash("sha256").update(url).digest("hex").slice(0, 40);
 }
 
-/** Descobre URLs candidatas para uma query: Firecrawl `/search` primário; se ele lançar ou
- *  a chave não estiver configurada, cai para o Google Custom Search (mesma query). Se nenhum
- *  provedor estiver configurado, retorna [] silenciosamente (noop, como hoje). */
+/** Descobre URLs candidatas para uma query, cascata FREE-FIRST (custo pro nosso bolso):
+ *  1) Firecrawl `/search` (primário — melhor recall + filtro de tempo qdr:d; 1k/mês grátis)
+ *  2) grounding do Gemini (fallback grátis — 5k/mês; reusa GEMINI_API_KEY, sem CSE)
+ *  3) Google Custom Search (só se GOOGLE_CSE_ID configurado)
+ *  Sem nenhum provedor → [] (noop). */
 async function discoverUrls(query: string, limit: number): Promise<FirecrawlSearchResult[]> {
   if (process.env.FIRECRAWL_API_KEY) {
     try {
-      return await firecrawlSearch(query, limit);
+      const r = await firecrawlSearch(query, limit);
+      if (r.length > 0) return r;
     } catch (e) {
-      console.warn(`discoverUrls: Firecrawl falhou para "${query}", caindo para Google:`, e);
+      console.warn(`discoverUrls: Firecrawl falhou para "${query}", caindo para grounding:`, e);
     }
   }
+  const grounded = await groundedSearch(query, limit);
+  if (grounded.length > 0)
+    return grounded.map((g) => ({ url: g.url, title: g.title, description: g.snippet }));
   const google = await googleSearch(query, limit);
   return google.map((g) => ({ url: g.url, title: g.title, description: g.snippet }));
 }
@@ -112,8 +118,9 @@ export async function scanNewsForOrg(
   orgId: string,
 ): Promise<{ inserted: number; queries: number }> {
   const hasFirecrawl = Boolean(process.env.FIRECRAWL_API_KEY);
+  const hasGrounding = Boolean(process.env.GEMINI_API_KEY); // fallback grátis de descoberta
   const hasGoogle = Boolean(process.env.GOOGLE_API_KEY && process.env.GOOGLE_CSE_ID);
-  if (!hasFirecrawl && !hasGoogle) return { inserted: 0, queries: 0 };
+  if (!hasFirecrawl && !hasGrounding && !hasGoogle) return { inserted: 0, queries: 0 };
   // Build queries from org_vocabulary: city/facility/opponent terms + neighborhood
   const { data: vocab } = await supabaseAdmin
     .from("org_vocabulary")

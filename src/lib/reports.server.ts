@@ -2,7 +2,7 @@
 // and asks the AI to write the executive narrative.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { callAi, MODEL_PRO, MODEL_FLASH } from "./ai-gateway.server";
+import { callAi, MODEL_PRO, MODEL_FLASH, MODEL_DEEPSEEK } from "./ai-gateway.server";
 import { buildFallbackReport } from "./report-fallback";
 
 type Kind = "daily" | "weekly" | "monthly";
@@ -309,7 +309,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
   try {
     const aiResp = await callAi({
       model: MODEL_PRO,
-      fallbackModels: [MODEL_FLASH],
+      fallbackModels: [MODEL_FLASH, MODEL_DEEPSEEK], // PRO → Flash → DeepSeek → determinístico
       temperature: 0.45,
       maxTokens: 8000,
       timeoutMs: 90_000,

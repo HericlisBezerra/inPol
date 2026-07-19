@@ -1,7 +1,7 @@
 // Tests: googleSearch (parse do Custom Search JSON API) e extractReadable (SSRF guard + strip de HTML).
 process.env.GOOGLE_API_KEY = "test-key";
 process.env.GOOGLE_CSE_ID = "test-cx";
-const { googleSearch } = await import("../src/lib/web-search.server.ts");
+const { googleSearch, groundedSearch } = await import("../src/lib/web-search.server.ts");
 const { extractReadable } = await import("../src/lib/readability.server.ts");
 
 let pass = 0,
@@ -88,6 +88,32 @@ ok(
     !r7?.markdown?.includes("rodapé"),
   "remove script/nav/footer",
 );
+
+// grounding do Gemini: parseia groundingChunks[].web.uri + dedup
+process.env.GEMINI_API_KEY = "gem-key";
+global.fetch = async () =>
+  res(200, {
+    candidates: [
+      {
+        groundingMetadata: {
+          groundingChunks: [
+            { web: { uri: "https://vertexaisearch.google/a", title: "tribunadejundiai.com.br" } },
+            { web: { uri: "https://vertexaisearch.google/b", title: "sampi.net.br" } },
+            { web: { uri: "https://vertexaisearch.google/a", title: "dup" } },
+          ],
+        },
+      },
+    ],
+  });
+const g1 = await groundedSearch("jundiaí", 8);
+ok(g1.length === 2, `groundedSearch parseia + dedup groundingChunks (${g1.length})`);
+ok(
+  g1[0].url.includes("vertexaisearch") && g1[0].title === "tribunadejundiai.com.br",
+  "extrai uri+title do grounding",
+);
+delete process.env.GEMINI_API_KEY;
+const g2 = await groundedSearch("x");
+ok(Array.isArray(g2) && g2.length === 0, "groundedSearch sem GEMINI_API_KEY retorna []");
 
 console.log(`\n${pass} passaram, ${fail} falharam`);
 process.exit(fail ? 1 : 0);

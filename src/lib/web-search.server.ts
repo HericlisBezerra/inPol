@@ -21,6 +21,74 @@ interface CustomSearchResponse {
 const CUSTOM_SEARCH_ENDPOINT = "https://www.googleapis.com/customsearch/v1";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+// Grounding do Gemini (Google Search nativo na API) — reusa GEMINI_API_KEY, sem CSE.
+// Cota free: 5.000 buscas ancoradas/mês na família 3.x → serve de buffer grátis quando o
+// Firecrawl (1k/mês) esgota. É o endpoint NATIVO (generateContent), não o OpenAI-compat.
+const GEMINI_NATIVE = "https://generativelanguage.googleapis.com/v1beta/models";
+const GROUNDING_MODEL = "gemini-3.5-flash";
+
+interface GroundingResponse {
+  candidates?: Array<{
+    groundingMetadata?: {
+      groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+    };
+  }>;
+}
+
+/**
+ * Descoberta de URLs via grounding do Gemini (Google Search). Retorna [] (nunca lança) se a
+ * GEMINI_API_KEY não existir ou em erro. Uso "off-label" (o grounding ancora uma resposta e
+ * cita fontes) — por isso é FALLBACK, não primário: o Firecrawl `/search` tem melhor recall.
+ * As URIs vêm como redirect do Google e resolvem para o artigo real ao serem raspadas.
+ */
+export async function groundedSearch(query: string, limit = 8): Promise<WebSearchResult[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return [];
+
+  const url = `${GEMINI_NATIVE}/${GROUNDING_MODEL}:generateContent?key=${apiKey}`;
+  const prompt = `Liste as notícias e publicações recentes da imprensa local sobre: "${query}". Priorize conteúdo dos últimos dias, com o veículo e o título de cada uma.`;
+
+  // grounding faz busca real + geração → costuma levar 10-15s; timeout folgado.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ google_search: {} }],
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(
+        `groundedSearch: falha [${res.status}] para "${query}": ${body || res.statusText}`,
+      );
+      return [];
+    }
+    const j = (await res.json()) as GroundingResponse;
+    const chunks = j.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+    const out: WebSearchResult[] = [];
+    const seen = new Set<string>();
+    for (const c of chunks) {
+      const uri = c.web?.uri;
+      if (!uri || seen.has(uri)) continue;
+      seen.add(uri);
+      out.push({ title: c.web?.title ?? uri, url: uri, snippet: c.web?.title ?? "" });
+      if (out.length >= limit) break;
+    }
+    return out;
+  } catch (e) {
+    const aborted = e instanceof Error && e.name === "AbortError";
+    console.warn(`groundedSearch: ${aborted ? "timeout" : "erro de rede"} para "${query}"`);
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /**
  * Busca resultados reais via Google Custom Search JSON API. Retorna [] (nunca lança) se as
  * env vars não estiverem configuradas ou se a chamada falhar — quem chama trata como "sem
