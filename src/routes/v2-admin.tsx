@@ -90,7 +90,152 @@ function Screen() {
             </div>
           </div>
         </div>
+
+        {/* Saúde do pipeline */}
+        <div className="mt-8 mb-2 flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-v2-green" />
+          <span className="font-mono text-[11px] font-bold uppercase tracking-[0.1em] text-v2-ink-3">
+            Saúde do pipeline
+          </span>
+          <span className="font-mono text-[10.5px] text-v2-faint">· Prefeitura de Jundiaí</span>
+        </div>
+
+        {/* Coleta por fonte */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <SourceCard
+            name="WhatsApp · Evolution"
+            last="sincronizado há 4 min"
+            volume="18,4 mil msgs / 24h"
+            statusText="webhook ativo"
+            statusTone="green"
+          />
+          <SourceCard
+            name="Imprensa · Firecrawl + grounding"
+            last="varredura há 2h"
+            volume="142 artigos / 24h"
+            statusText="ok"
+            statusTone="green"
+          />
+          <SourceCard
+            name="Instagram · Apify"
+            last="coleta há 3h"
+            volume="1,2 mil posts / 24h"
+            statusText="ok"
+            statusTone="green"
+          />
+        </div>
+
+        {/* Cotas grátis do mês (free-first) + Análise/Relatórios */}
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-[13px] border border-v2-line bg-v2-card px-[18px] py-4">
+            <div className="mb-3 flex items-baseline justify-between">
+              <span className="text-[13.5px] font-[650] text-v2-ink">Cotas grátis do mês</span>
+              <span className="font-mono text-[10px] text-v2-faint">FREE-FIRST</span>
+            </div>
+            <QuotaBar
+              label="Firecrawl (descoberta + scrape)"
+              used={640}
+              total={1000}
+              tone="green"
+            />
+            <QuotaBar label="Grounding Gemini (buffer)" used={180} total={5000} tone="green" />
+            <div className="mt-2 font-mono text-[10.5px] text-v2-faint">
+              DeepSeek (micro-análise): sem cota grátis · ~$1,80 no mês
+            </div>
+          </div>
+          <div className="rounded-[13px] border border-v2-line bg-v2-card px-[18px] py-4">
+            <div className="mb-3 text-[13.5px] font-[650] text-v2-ink">
+              Análise & relatórios (24h)
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <MiniStat label="Resolvido por matemática (L0)" value="58%" tone="green" />
+              <MiniStat label="Resolvido por IA (DeepSeek)" value="42%" />
+              <MiniStat label="Fila de análise" value="12 pendentes" />
+              <MiniStat label="Em erro (reprocessando)" value="3" tone="warn" />
+              <MiniStat label="Relatórios gerados" value="3" tone="green" />
+              <MiniStat label="Em modo contingência" value="0" tone="green" />
+            </div>
+          </div>
+        </div>
       </main>
+    </div>
+  );
+}
+
+function SourceCard({
+  name,
+  last,
+  volume,
+  statusText,
+  statusTone,
+}: {
+  name: string;
+  last: string;
+  volume: string;
+  statusText: string;
+  statusTone: "green" | "warn" | "crit";
+}) {
+  return (
+    <div className="rounded-[13px] border border-v2-line bg-v2-card px-4 py-3.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-[650] text-v2-ink">{name}</span>
+        <span
+          className={`flex items-center gap-1.5 font-mono text-[10.5px] ${TONE_TEXT[statusTone]}`}
+        >
+          <span className={`h-1.5 w-1.5 rounded-full bg-current`} />
+          {statusText}
+        </span>
+      </div>
+      <div className="mt-2 text-[15px] font-[650] text-v2-ink">{volume}</div>
+      <div className="mt-0.5 font-mono text-[11px] text-v2-faint">{last}</div>
+    </div>
+  );
+}
+
+function QuotaBar({
+  label,
+  used,
+  total,
+  tone,
+}: {
+  label: string;
+  used: number;
+  total: number;
+  tone: "green" | "warn" | "crit";
+}) {
+  const pct = Math.max(2, Math.min(100, Math.round((used / total) * 100)));
+  const fill =
+    tone === "crit" ? "bg-v2-crit" : tone === "warn" ? "bg-v2-warn-strong" : "bg-v2-green";
+  return (
+    <div className="mb-2.5 last:mb-0">
+      <div className="flex justify-between text-[12.5px]">
+        <span className="text-v2-ink-2">{label}</span>
+        <span className="font-mono text-[11px] text-v2-ink-3">
+          {used.toLocaleString("pt-BR")} / {total.toLocaleString("pt-BR")}
+        </span>
+      </div>
+      <div className="mt-1.5 h-[5px] rounded-[3px] bg-v2-track">
+        <div className={`h-full rounded-[3px] ${fill}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "green" | "warn";
+}) {
+  const color =
+    tone === "green" ? "text-v2-green" : tone === "warn" ? "text-v2-warn" : "text-v2-ink";
+  return (
+    <div>
+      <div className="text-[11.5px] leading-tight text-v2-ink-3">{label}</div>
+      <div className={`mt-0.5 text-[16px] font-[650] ${color}`}>{value}</div>
     </div>
   );
 }
