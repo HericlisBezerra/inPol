@@ -37,3 +37,4 @@ dist-ssr
 # backup do banco p/ migração (segredos — nunca commitar)
 .migration-backup/
 .migration-backup*/
+supabase/.temp/
