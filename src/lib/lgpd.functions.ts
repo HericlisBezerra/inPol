@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SupabaseClient<Database> tem tipo genérico complexo; o helper só usa .rpc
 async function assertOrgOwner(supabase: any, userId: string, orgId: string) {
   const { data: ok } = await supabase.rpc("has_org_role", {
     _user_id: userId,

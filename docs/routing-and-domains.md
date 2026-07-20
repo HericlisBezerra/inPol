@@ -5,10 +5,10 @@ A separação já está refletida na estrutura de pastas de `src/routes/`.
 
 ## Mapa produto → pasta → domínio
 
-| Produto | Pasta (`src/routes/`) | Rotas hoje (parallel-run) | Domínio no cutover |
-|---|---|---|---|
-| **Site público** (vendas + legais) | `site/` | `/site`, `/site/privacidade`, `/site/termos`, `/site/lgpd` | **domínio principal** — `inpolapp.com` (mapeado para a raiz: `/`, `/privacidade`, `/termos`, `/lgpd`) |
-| **Painel do cliente** (app) | `v2/` + auth solta | `/v2/*`, `/entrar`, `/sair`, `/comecar` | **subdomínio** — `dash.inpol…` (mapeado para a raiz do subdomínio: `/`, `/entrar`, …) |
+| Produto                            | Pasta (`src/routes/`) | Rotas hoje (parallel-run)                                  | Domínio no cutover                                                                                    |
+| ---------------------------------- | --------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Site público** (vendas + legais) | `site/`               | `/site`, `/site/privacidade`, `/site/termos`, `/site/lgpd` | **domínio principal** — `inpolapp.com` (mapeado para a raiz: `/`, `/privacidade`, `/termos`, `/lgpd`) |
+| **Painel do cliente** (app)        | `v2/` + auth solta    | `/v2/*`, `/entrar`, `/sair`, `/comecar`                    | **subdomínio** — `dash.inpol…` (mapeado para a raiz do subdomínio: `/`, `/entrar`, …)                 |
 
 - **Produto site** (`site/`): tema claro/cream (`.v2-site`), header/footer próprios por página, sem shell de app.
   Não depende de auth nem de backend. É estático o suficiente para servir da raiz do domínio principal.

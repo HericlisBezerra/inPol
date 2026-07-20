@@ -40,7 +40,13 @@ const PRINT_CSS = `
 @page { margin: 22mm 18mm; }
 `;
 
-export function PublicReport({ report }: { report: PublicReportData }) {
+export function PublicReport({
+  report,
+  isDemo = false,
+}: {
+  report: PublicReportData;
+  isDemo?: boolean;
+}) {
   const fmt = (d: string) =>
     new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -49,6 +55,12 @@ export function PublicReport({ report }: { report: PublicReportData }) {
       <style>{PRINT_CSS}</style>
 
       <div className="v2-pub-frame mx-auto w-full max-w-[820px] px-4 py-8 sm:px-6 sm:py-12">
+        {isDemo && (
+          <div className="mx-auto mb-4 max-w-[820px] rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-center font-mono text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-800">
+            ⚠️ Demonstração — dados fictícios, não representam cidadãos reais
+          </div>
+        )}
+
         {/* Folha editorial */}
         <div className="v2-pub-sheet rounded-2xl border border-v2-line bg-v2-card px-6 py-9 shadow-[0_1px_2px_rgba(33,31,28,0.04),0_10px_32px_rgba(33,31,28,0.06)] sm:px-12 sm:py-12">
           {/* Cabeçalho: wordmark + meta do período */}
@@ -96,9 +108,17 @@ export function PublicReport({ report }: { report: PublicReportData }) {
           </article>
 
           {/* Rodapé discreto */}
-          <footer className="mt-12 flex flex-wrap items-center justify-between gap-3 border-t border-v2-line pt-5 font-mono text-[10.5px] tracking-[0.06em] text-v2-faint">
-            <span>gerado pelo inPol</span>
-            <span>inpolapp.com</span>
+          <footer className="mt-12 border-t border-v2-line pt-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 font-mono text-[10.5px] tracking-[0.06em] text-v2-faint">
+              <span>gerado pelo inPol</span>
+              <span>inpolapp.com</span>
+            </div>
+            {/* Transparência LGPD: base legal do compartilhamento (interesse legítimo + revisão). */}
+            <p className="mt-3 text-[10.5px] leading-[1.5] text-v2-faint">
+              Relatório institucional do gabinete. As citações reproduzem manifestações de cidadãos
+              em canais públicos e monitorados, sob interesse legítimo do mandato; dados de contato
+              e identificação individual são removidos antes da publicação.
+            </p>
           </footer>
         </div>
 

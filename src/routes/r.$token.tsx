@@ -41,20 +41,43 @@ const getSharedReport = createServerFn({ method: "GET" })
     if (!isValidTokenFormat(data.token)) return null;
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: r } = await supabaseAdmin
+    // Expõe SÓ o snapshot SANITIZADO (markdown_public), NUNCA o markdown cru nem org_id/id/data/model.
+    // markdown_public entra na migração report_public_sanitize; string de select como variável
+    // `string` evita o SelectQueryError do typegen até a regen dos tipos no cutover.
+    const publicCols = "kind, title, period_start, period_end, markdown_public";
+    const { data: r, error } = await supabaseAdmin
       .from("reports")
-      .select("kind, title, period_start, period_end, markdown") // NUNCA org_id/id/data/model
-      // share_token/share_enabled entram na migração report_public_share (aplicada no cutover);
-      // .match aceita as chaves e o filtro chega ao PostgREST — funciona quando as colunas existem.
+      .select(publicCols)
+      // .match aceita share_token/share_enabled (migração report_public_share) e o filtro chega ao PostgREST.
       .match({ share_token: data.token, share_enabled: true })
-      .maybeSingle();
+      .maybeSingle<{
+        kind: string;
+        title: string;
+        period_start: string;
+        period_end: string;
+        markdown_public: string | null;
+      }>();
+    if (error) console.error("[share] erro ao buscar relatório público:", error);
     if (!r) return null;
+    // markdown_public NULL = nunca sanitizado → não expõe (defesa: publicar já exige NOT NULL).
+    const publicMd = r.markdown_public;
+    if (!publicMd) return null;
+    // Guard de runtime (cinto-e-suspensório): reaplica o determinístico (telefone/horário) sobre o
+    // snapshot e o título. Se ISSO redigir algo, é sinal de que o pipeline falhou — logar/alertar.
+    const { sanitizeReportMarkdown } = await import("@/lib/report-sanitize");
+    const guarded = sanitizeReportMarkdown(publicMd).text;
+    const guardedTitle = sanitizeReportMarkdown(r.title).text;
+    if (guarded !== publicMd || guardedTitle !== r.title) {
+      console.error("[share] GUARD disparou: PII residual num snapshot já publicado — investigar", {
+        token: data.token,
+      });
+    }
     return {
-      title: r.title,
+      title: guardedTitle,
       kind: r.kind as PublicReportData["kind"],
       periodStart: r.period_start,
       periodEnd: r.period_end,
-      markdown: r.markdown ?? "",
+      markdown: guarded,
     };
   });
 
@@ -74,15 +97,15 @@ export const Route = createFileRoute("/r/$token")({
   loader: async ({ params }) => {
     const report = await getSharedReport({ data: { token: params.token } });
     if (!report) throw notFound();
-    return { report };
+    return { report, isDemo: params.token === "demo" };
   },
   component: PublicPage,
   notFoundComponent: PublicNotFound,
 });
 
 function PublicPage() {
-  const { report } = Route.useLoaderData();
-  return <PublicReport report={report} />;
+  const { report, isDemo } = Route.useLoaderData();
+  return <PublicReport report={report} isDemo={isDemo} />;
 }
 
 function PublicNotFound() {

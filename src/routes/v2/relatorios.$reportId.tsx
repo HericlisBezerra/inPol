@@ -29,8 +29,8 @@ function Screen() {
 
   return (
     <div className="mx-auto w-full max-w-[780px]">
-      {/* Top bar: back + export */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Top bar: back + export — some na impressão (o PDF não deve trazer os controles) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <Link to="/v2/relatorios" className="text-[13px] text-v2-ink-3 hover:text-v2-ink">
           ← Relatórios
         </Link>
@@ -236,9 +236,23 @@ function Screen() {
  * TODO(cutover): ligar em createReportShare/revokeReportShare de "@/lib/reports-share.functions".
  */
 function ShareModal({ onClose }: { onClose: () => void }) {
-  const [active, setActive] = useState(true); // demo: link já ativo
+  const [published, setPublished] = useState(false); // demo: publicado ou em revisão
+  const [confirmed, setConfirmed] = useState(false); // gate ativo: revisou a versão sanitizada
   const [copied, setCopied] = useState(false);
   const publicUrl = "https://inpolapp.com/r/demo";
+  const degraded = false; // demo: true = sanitização automática incompleta (IA de redação falhou)
+
+  const revoke = () => {
+    setPublished(false);
+    setConfirmed(false); // reabrir exige reconfirmar a revisão
+  };
+
+  // Marca de redação: mono + fundo track, sinaliza trecho removido na versão pública
+  const redacted = (label: string) => (
+    <span className="whitespace-nowrap rounded bg-v2-track px-1.5 py-px font-mono text-[11px] not-italic text-v2-ink-3">
+      [{label}]
+    </span>
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -268,7 +282,7 @@ function ShareModal({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-labelledby="share-modal-title"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[440px] rounded-2xl border border-v2-line bg-v2-card p-6 shadow-[0_12px_40px_rgba(33,31,28,0.18)]"
+        className="w-full max-w-[480px] rounded-2xl border border-v2-line bg-v2-card p-6 shadow-[0_12px_40px_rgba(33,31,28,0.18)]"
       >
         <div className="flex items-start justify-between gap-4">
           <h2 id="share-modal-title" className="font-display text-[19px] font-[650] text-v2-ink">
@@ -296,7 +310,7 @@ function ShareModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
-        {active ? (
+        {published ? (
           <>
             <label
               htmlFor="share-public-url"
@@ -320,26 +334,73 @@ function ShareModal({ onClose }: { onClose: () => void }) {
                 {copied ? "Copiado ✓" : "Copiar"}
               </button>
             </div>
+            <p className="mt-2 text-[12px] leading-[1.5] text-v2-ink-3">
+              O link publica a <b className="font-[650] text-v2-ink-2">versão sanitizada</b>{" "}
+              revisada por você — sem nomes, contatos ou grupos.
+            </p>
             <button
               type="button"
-              onClick={() => setActive(false)}
+              onClick={revoke}
               className="mt-4 w-full rounded-lg border border-v2-crit/40 bg-v2-crit-bg px-3 py-2 text-[12.5px] font-[650] text-v2-crit transition-colors hover:border-v2-crit"
             >
               Revogar acesso
             </button>
           </>
         ) : (
-          <div className="mt-5 rounded-xl border border-v2-line bg-v2-track px-4 py-4 text-center">
-            <p className="text-[13px] font-[600] text-v2-ink">Acesso revogado.</p>
-            <p className="mt-1 text-[12.5px] text-v2-ink-3">O link anterior deixou de funcionar.</p>
+          <>
+            {degraded && (
+              <div className="mt-3 rounded-xl border border-v2-warn-strong/40 bg-v2-warn-bg px-4 py-3">
+                <p className="text-[12.5px] leading-[1.55] text-v2-warn">
+                  ⚠️ <b>Sanitização automática parcial</b> — revise com atenção redobrada, a IA de
+                  redação de nomes não completou.
+                </p>
+              </div>
+            )}
+
+            {/* Prévia sanitizada: o admin revisa exatamente o que ficará público */}
+            <div className="mt-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="font-mono text-[10.5px] font-semibold tracking-[0.1em] text-v2-ink-3">
+                  PRÉVIA DA VERSÃO PÚBLICA (SANITIZADA)
+                </span>
+                <span className="font-mono text-[10.5px] text-v2-faint">demo</span>
+              </div>
+              <div className="mt-1.5 max-h-44 overflow-y-auto rounded-xl border border-v2-line bg-v2-surface px-4 py-3.5">
+                <blockquote className="border-l-2 border-v2-line-strong pl-3 font-display text-[14px] italic leading-[1.6] text-v2-ink">
+                  "terceira vez que alaga e ninguém aparece" — morador da Vila Rami
+                </blockquote>
+                <p className="mt-3 text-[13px] leading-[1.7] text-v2-ink-2">
+                  Uma moradora {redacted("nome removido")} relatou fila na UBS do Retiro; contato{" "}
+                  {redacted("contato removido")} deixado no grupo {redacted("grupo removido")} pela
+                  manhã.
+                </p>
+              </div>
+              <p className="mt-2 font-mono text-[11px] tracking-[0.02em] text-v2-ink-3">
+                8 nomes · 3 telefones · 12 horários · 2 grupos removidos
+              </p>
+            </div>
+
+            {/* Confirmação ATIVA: publicar exige revisão humana da versão sanitizada */}
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-xl border border-v2-line bg-v2-surface px-4 py-3">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 flex-none accent-v2-green"
+              />
+              <span className="text-[13px] leading-[1.5] text-v2-ink">
+                Revisei a <b>versão sanitizada</b> e assumo a responsabilidade por publicá-la.
+              </span>
+            </label>
             <button
               type="button"
-              onClick={() => setActive(true)}
-              className="mt-3 rounded-lg border border-v2-line-strong bg-v2-card px-3.5 py-2 text-[12.5px] font-[650] text-v2-ink hover:border-v2-ink-3"
+              disabled={!confirmed}
+              onClick={() => setPublished(true)}
+              className="mt-3 w-full rounded-lg bg-v2-green px-3.5 py-2.5 text-[12.5px] font-[650] text-white transition-colors hover:bg-v2-green-hover disabled:cursor-not-allowed disabled:opacity-45"
             >
-              Gerar novo link
+              Publicar link público
             </button>
-          </div>
+          </>
         )}
       </div>
     </div>
