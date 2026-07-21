@@ -1,13 +1,48 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { CSSProperties, ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { listReports } from "@/lib/reports.functions";
+import { useCurrentOrg } from "@/lib/use-current-org";
 
 export const Route = createFileRoute("/v2/relatorios/")({
   head: () => ({ meta: [{ title: "Relatórios — Inpol v2" }] }),
   component: Screen,
 });
 
-/** S7 — Relatórios: lista com TL;DR visível — sem abrir já se sabe o que tem dentro. Demo data. */
+const KIND_META: Record<string, { label: string; kindClass: string }> = {
+  daily: { label: "DIÁRIO", kindClass: "text-v2-green bg-v2-green-tint" },
+  weekly: { label: "SEMANAL", kindClass: "text-v2-blue bg-v2-blue-bg" },
+  monthly: { label: "MENSAL", kindClass: "text-v2-purple bg-v2-purple-bg" },
+};
+
+function formatWhen(iso: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
+/**
+ * S7 — Relatórios: lista com TL;DR visível — sem abrir já se sabe o que tem dentro.
+ * Dados reais via listReports (org atual). Botão "Gerar agora" mantido apenas visual —
+ * a geração manual está desativada em toda a base (ver src/routes/_authenticated/reports.tsx);
+ * não reativar sem pedido explícito.
+ */
 function Screen() {
+  const { orgId } = useCurrentOrg();
+
+  const {
+    data: reports = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["reports", orgId],
+    queryFn: () => listReports({ data: { orgId: orgId as string } }),
+    enabled: !!orgId,
+  });
+
   return (
     <div className="mx-auto w-full max-w-[820px]">
       {/* Header */}
@@ -18,51 +53,51 @@ function Screen() {
             Diário às 08h · semanal segunda · mensal dia 1º. Também chegam no seu WhatsApp.
           </p>
         </div>
-        <button className="rounded-lg bg-v2-ink px-4 py-2 text-[13px] font-[650] text-white">
+        <button
+          disabled
+          title="Geração manual temporariamente desativada"
+          className="rounded-lg bg-v2-ink px-4 py-2 text-[13px] font-[650] text-white disabled:opacity-50"
+        >
           Gerar agora ⌄
         </button>
       </div>
 
+      {!orgId && (
+        <div className="mt-[22px] text-[13px] text-v2-ink-3">Selecione uma organização.</div>
+      )}
+
+      {orgId && isError && (
+        <div className="mt-[22px] text-[13px] text-v2-crit">
+          Não foi possível carregar os relatórios. Tente novamente.
+        </div>
+      )}
+
+      {orgId && isLoading && <div className="mt-[22px] text-[13px] text-v2-ink-3">Carregando…</div>}
+
+      {orgId && !isLoading && !isError && reports.length === 0 && (
+        <div className="mt-[22px] text-[13px] text-v2-ink-3">
+          Nenhum relatório ainda. O primeiro chega no próximo agendamento.
+        </div>
+      )}
+
       {/* Report list */}
-      <div className="mt-[22px] flex flex-col gap-2.5">
-        <ReportCard
-          reportId="diario-18-jul"
-          kind="DIÁRIO"
-          kindClass="text-v2-green bg-v2-green-tint"
-          title="Sexta, 18 de julho — dia de agir na Vila Rami"
-          when="hoje 08:00"
-          tldr={
-            <>
-              <b className="font-bold text-v2-crit">1.</b> Enchente Vila Rami exige resposta até 12h
-              &nbsp; <b className="font-bold text-v2-warn">2.</b> UBS Retiro subindo (▲44%) &nbsp;{" "}
-              <b className="font-bold text-v2-green">3.</b> Ciclovia é o melhor conteúdo da semana
-            </>
-          }
-          stats={["18,4 mil msgs", "3 alertas"]}
-        />
-        <ReportCard
-          reportId="semanal-28"
-          kind="SEMANAL"
-          kindClass="text-v2-blue bg-v2-blue-bg"
-          title="Semana 28 — sentimento em alta, zona norte em queda"
-          when="seg 08:00"
-          tldr={
-            <>
-              Sentimento geral +0.18 (▲0.05). Zona norte concentra 58% das negativas. Oposição
-              ativou pauta &ldquo;abandono&rdquo;.
-            </>
-          }
-          stats={["96 mil msgs", "9 alertas"]}
-        />
-        <ReportCard
-          reportId="mensal-junho"
-          kind="MENSAL"
-          kindClass="text-v2-purple bg-v2-purple-bg"
-          title="Junho — balanço do semestre e mapa de riscos"
-          when="01 jul 08:00"
-          dimmed
-        />
-      </div>
+      {reports.length > 0 && (
+        <div className="mt-[22px] flex flex-col gap-2.5">
+          {reports.map((r) => {
+            const meta = KIND_META[r.kind] ?? { label: r.kind.toUpperCase(), kindClass: "" };
+            return (
+              <ReportCard
+                key={r.id}
+                reportId={r.id}
+                kind={meta.label}
+                kindClass={meta.kindClass}
+                title={r.title ?? meta.label}
+                when={formatWhen(r.generated_at)}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* IA hint */}
       <div className="mt-4 flex items-center gap-3 rounded-xl border border-v2-green-border bg-v2-green-tint px-4 py-[13px]">

@@ -1,12 +1,89 @@
+import { useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { listElected } from "@/lib/elected.functions";
+import { useCurrentOrg } from "@/lib/use-current-org";
 
 export const Route = createFileRoute("/v2/camara/")({
   head: () => ({ meta: [{ title: "Câmara — Inpol v2" }] }),
   component: Screen,
 });
 
-/** S14 — Câmara Municipal: sessões, pautas com recomendação de foco, quem falou o quê. Demo data. */
+type ElectedRow = {
+  id: string;
+  nome: string;
+  nome_urna: string | null;
+  partido_sigla: string | null;
+  numero: string;
+  cargo_nome: string;
+  cargo_codigo: string | null;
+  uf: string;
+  ano_eleicao: number;
+  is_elected: boolean;
+  alignment: string;
+  imported_at: string;
+};
+
+type ElectedAlignment = "ally" | "opponent" | "neutral" | "management";
+
+const ALIGN_META: Record<
+  ElectedAlignment,
+  { label: string; avatarClass: string; metaClass: string }
+> = {
+  ally: {
+    label: "base",
+    avatarClass: "bg-v2-green-tint text-v2-green",
+    metaClass: "text-v2-green",
+  },
+  opponent: {
+    label: "oposição",
+    avatarClass: "bg-v2-crit-bg text-v2-crit",
+    metaClass: "text-v2-crit",
+  },
+  neutral: {
+    label: "independente",
+    avatarClass: "bg-v2-warn-bg text-v2-warn",
+    metaClass: "text-v2-warn",
+  },
+  management: {
+    label: "independente",
+    avatarClass: "bg-v2-warn-bg text-v2-warn",
+    metaClass: "text-v2-warn",
+  },
+};
+
+function initialsFor(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0]?.slice(0, 1) ?? "";
+  const second = parts[1]?.slice(0, 1) ?? parts[0]?.slice(1, 2) ?? "";
+  return (first + second).toUpperCase();
+}
+
+/** S14 — Câmara Municipal: sessões, pautas com recomendação de foco, quem falou o quê. Demo data
+ * (sessões/pautas/falas não têm backend). O card "VEREADORES EM MOVIMENTO" usa dados reais de
+ * `listElected`. */
 function Screen() {
+  const { orgId } = useCurrentOrg();
+
+  const {
+    data: items = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["elected", orgId],
+    queryFn: () => listElected({ data: { orgId: orgId as string, onlyElected: true } }),
+    enabled: !!orgId,
+  });
+
+  const vereadores = useMemo(
+    () =>
+      (items as ElectedRow[]).filter(
+        (r) => r.cargo_codigo === "13" || /vereador/i.test(r.cargo_nome),
+      ),
+    [items],
+  );
+  const preview = vereadores.slice(0, 3);
+
   return (
     <div className="flex flex-col">
       {/* Header */}
@@ -144,33 +221,35 @@ function Screen() {
               <span className="font-mono text-[11px] font-bold tracking-[0.1em] text-v2-ink-3">
                 VEREADORES EM MOVIMENTO
               </span>
-              <button className="text-[12px] font-[650] text-v2-green">todos os 19 →</button>
+              <Link to="/v2/camara" className="text-[12px] font-[650] text-v2-green">
+                {vereadores.length > 0 ? `todos os ${vereadores.length} →` : "ver todos →"}
+              </Link>
             </div>
-            <VereadorRow
-              initials="JP"
-              avatarClass="bg-v2-crit-bg text-v2-crit"
-              name="João Parimoschi"
-              vereadorId="joao-parimoschi"
-              meta="alinhamento 23% · risco ALTO"
-              metaClass="text-v2-crit"
-            />
-            <VereadorRow
-              initials="EP"
-              avatarClass="bg-v2-warn-bg text-v2-warn"
-              name="Edson Prado"
-              vereadorId="edson-prado"
-              meta="alinhamento 58% ▼ · risco MÉDIO"
-              metaClass="text-v2-warn"
-            />
-            <VereadorRow
-              initials="RL"
-              avatarClass="bg-v2-green-tint text-v2-green"
-              name="Rosana Lima"
-              vereadorId="rosana-lima"
-              meta="alinhamento 91% · risco BAIXO"
-              metaClass="text-v2-green"
-              last
-            />
+            {isError && (
+              <div className="py-2 text-[12.5px] text-v2-crit">Não foi possível carregar.</div>
+            )}
+            {!isError && isLoading && (
+              <div className="py-2 text-[12.5px] text-v2-ink-3">Carregando…</div>
+            )}
+            {!isError && !isLoading && preview.length === 0 && (
+              <div className="py-2 text-[12.5px] text-v2-faint">Nenhum vereador importado.</div>
+            )}
+            {preview.map((v, i) => {
+              const meta = ALIGN_META[(v.alignment as ElectedAlignment) ?? "neutral"];
+              const name = v.nome_urna ?? v.nome;
+              return (
+                <VereadorRow
+                  key={v.id}
+                  initials={initialsFor(name)}
+                  avatarClass={meta.avatarClass}
+                  name={name}
+                  vereadorId={v.id}
+                  meta={meta.label}
+                  metaClass={meta.metaClass}
+                  last={i === preview.length - 1}
+                />
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-3 rounded-xl border border-v2-green-border bg-v2-green-tint px-4 py-[13px]">
