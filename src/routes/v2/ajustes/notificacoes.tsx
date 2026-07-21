@@ -20,7 +20,16 @@ const EVENTOS: { label: ReactNode; note?: string; canais: Canais }[] = [
   { label: "Sessão da Câmara resumida", canais: [true, false, false, true] },
 ];
 
-/** S27 — Ajustes · Notificações: o que chega, por onde e para quem. Demo data. */
+/**
+ * S27 — Ajustes · Notificações: o que chega, por onde e para quem. Demo data.
+ *
+ * Investigado em 2026-07-20: não existe backend de preferências de notificação
+ * no projeto (sem tabela `notification_settings`/equivalente nas migrations, sem
+ * server fn em `src/lib/*.functions.ts`, sem menção em `settings.tsx`). Os toggles
+ * abaixo só mudam estado local (useState) — não persistem e resetam ao recarregar.
+ * Se/quando esse backend existir, ligar aqui seguindo o padrão de
+ * `src/routes/v2/ajustes/index.tsx` (useQuery/useMutation + useCurrentOrg + invalidate).
+ */
 function Screen() {
   return (
     <div>
@@ -29,6 +38,9 @@ function Screen() {
         <div className="text-[16px] font-[650] text-v2-ink">Notificações</div>
         <div className="mt-[3px] text-[13px] text-v2-ink-3">
           Regra de ouro: crítico fura tudo; o resto respeita horário de silêncio.
+        </div>
+        <div className="mt-1 text-[11.5px] text-v2-faint">
+          Preferências ainda não são salvas nesta tela — alterações abaixo são só de demonstração.
         </div>
       </div>
 

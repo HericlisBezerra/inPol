@@ -1,22 +1,91 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentOrg } from "@/lib/use-current-org";
+import {
+  listInstances,
+  listGroups,
+  refreshGroups,
+  toggleGroupMonitoring,
+} from "@/lib/whatsapp.functions";
+import { listVocabulary } from "@/lib/vocabulary.functions";
 
 export const Route = createFileRoute("/v2/rede")({
   head: () => ({ meta: [{ title: "Rede — Inpol v2" }] }),
   component: Screen,
 });
 
-/** S9 + S23 + S10 — Rede consolidada: Adversários / Pessoas / Grupos em abas. Demo data. */
+/**
+ * S9 + S23 + S10 — Rede consolidada: Adversários / Pessoas / Grupos em abas.
+ * Dados reais via org_adversaries, org_instagram_targets, tracked_members,
+ * member_daily_stats e whatsapp.functions (listInstances/listGroups/...).
+ * Métricas que o schema não modela (ex.: MSGS 7D por grupo, jogadas/sinais
+ * comportamentais inferidos) ficam em estado vazio honesto — nunca inventadas.
+ */
 type TabId = "adversarios" | "pessoas" | "grupos";
 
-const TABS: { id: TabId; label: string; count: number }[] = [
-  { id: "adversarios", label: "⚔ Adversários", count: 4 },
-  { id: "pessoas", label: "👤 Pessoas", count: 12 },
-  { id: "grupos", label: "💬 Grupos", count: 142 },
-];
+function initialsOf(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 function Screen() {
+  const { orgId } = useCurrentOrg();
   const [tab, setTab] = useState<TabId>("adversarios");
+
+  const { data: advCount } = useQuery({
+    queryKey: ["rede-count-adversaries", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("org_adversaries")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId!);
+      return count ?? 0;
+    },
+  });
+  const { data: peopleCount } = useQuery({
+    queryKey: ["rede-count-members", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("tracked_members")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId!);
+      return count ?? 0;
+    },
+  });
+  const { data: groupsCount } = useQuery({
+    queryKey: ["rede-count-groups", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("whatsapp_groups")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId!);
+      return count ?? 0;
+    },
+  });
+  const { data: vocab = [] } = useQuery({
+    queryKey: ["vocab", orgId],
+    enabled: !!orgId,
+    queryFn: () => listVocabulary({ data: { orgId: orgId as string } }),
+  });
+  const fontesCount = vocab.filter((v) => v.kind === "news_domain").length;
+
+  const TABS: { id: TabId; label: string; count: number | null }[] = [
+    { id: "adversarios", label: "⚔ Adversários", count: advCount ?? null },
+    { id: "pessoas", label: "👤 Pessoas", count: peopleCount ?? null },
+    { id: "grupos", label: "💬 Grupos", count: groupsCount ?? null },
+  ];
+
+  if (!orgId) {
+    return <div className="p-6 text-[13px] text-v2-ink-3">Selecione uma organização.</div>;
+  }
+
   return (
     <div className="flex flex-col">
       {/* Header */}
@@ -50,62 +119,140 @@ function Screen() {
                 : "font-semibold text-v2-ink-3"
             }`}
           >
-            {t.label} <span className="text-v2-faint">{t.count}</span>
+            {t.label} <span className="text-v2-faint">{t.count ?? "…"}</span>
           </button>
         ))}
         <Link
           to="/v2/ajustes/fontes"
           className="whitespace-nowrap px-3.5 pt-2 pb-2.5 text-[13.5px] font-semibold text-v2-ink-3"
         >
-          📡 Fontes <span className="text-v2-faint">20</span>
+          📡 Fontes <span className="text-v2-faint">{fontesCount}</span>
         </Link>
       </div>
 
-      {tab === "adversarios" && <TabAdversarios />}
-      {tab === "pessoas" && <TabPessoas />}
-      {tab === "grupos" && <TabGrupos />}
+      {tab === "adversarios" && <TabAdversarios orgId={orgId} />}
+      {tab === "pessoas" && <TabPessoas orgId={orgId} />}
+      {tab === "grupos" && <TabGrupos orgId={orgId} />}
     </div>
   );
 }
 
 /* ─────────────────────────── Aba Adversários (S9) ─────────────────────────── */
 
-function TabAdversarios() {
+type Adv = {
+  id: string;
+  display_name: string;
+  handle: string | null;
+  role: string | null;
+  party: string | null;
+  activity_score: number;
+  top_topics: unknown;
+  recent_actions: unknown;
+};
+
+type IgTarget = {
+  id: string;
+  handle: string;
+  label: string | null;
+  kind: "opponent" | "ally" | "press" | "other";
+  active: boolean;
+  last_scanned_at: string | null;
+  last_status: string | null;
+};
+
+const KIND_LABEL: Record<IgTarget["kind"], string> = {
+  opponent: "Opositor",
+  ally: "Aliado",
+  press: "Imprensa",
+  other: "Outro",
+};
+
+function TabAdversarios({ orgId }: { orgId: string }) {
+  const {
+    data: adversaries = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["org-adversaries", orgId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("org_adversaries")
+        .select("id, display_name, handle, role, party, activity_score, top_topics, recent_actions")
+        .eq("org_id", orgId)
+        .order("activity_score", { ascending: false });
+      return (data ?? []) as Adv[];
+    },
+  });
+
+  const { data: igTargets = [], isLoading: igLoading } = useQuery({
+    queryKey: ["ig-targets", orgId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("org_instagram_targets")
+        .select("id, handle, label, kind, active, last_scanned_at, last_status")
+        .eq("org_id", orgId)
+        .order("kind")
+        .order("handle");
+      return (data ?? []) as IgTarget[];
+    },
+  });
+
+  const top = adversaries[0];
+
   return (
     <div>
-      <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
-        <AdversaryCard
-          initials="JP"
-          tone="crit"
-          name="João Parimoschi"
-          badge="MUITO ATIVO"
-          meta="Vereador · PL · @parimoschi"
-          score={87}
-          tags={["zona norte", "enchentes", "saúde"]}
-          plays={[
-            { when: "hoje", text: "Repostou prints da UBS do Retiro (320 reposts)" },
-            { when: "ontem", text: 'Pauta "abandono da zona norte" no X e Instagram' },
-          ]}
-        />
-        <AdversaryCard
-          initials="CB"
-          tone="warn"
-          name="Carla Bertolli"
-          badge="ATIVO"
-          meta="Pré-candidata · PSOL · @carlabertolli"
-          score={54}
-          tags={["educação", "creches"]}
-          plays={[
-            { when: "ter", text: "Live sobre vagas em creches (2,1 mil views)" },
-            { when: "seg", text: "Amplificou boato da creche do Anhangabaú" },
-          ]}
-        />
-      </div>
+      {isError && (
+        <div className="mb-3 text-[12.5px] text-v2-crit">
+          Não foi possível carregar os adversários. Tente novamente.
+        </div>
+      )}
 
-      <AiHint>
-        <b>Padrão detectado:</b> Parimoschi publica sobre zona norte sempre ~2h depois de picos
-        negativos nos grupos — ele monitora os mesmos espaços.
-      </AiHint>
+      {isLoading && <div className="text-[12.5px] text-v2-ink-3">Carregando…</div>}
+
+      {!isLoading && adversaries.length === 0 && (
+        <div className="rounded-[13px] border border-v2-line bg-v2-card px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
+          Nenhum adversário cadastrado.
+        </div>
+      )}
+
+      {adversaries.length > 0 && (
+        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+          {adversaries.map((a) => {
+            const tone: "crit" | "warn" = a.activity_score >= 70 ? "crit" : "warn";
+            const badge = a.activity_score >= 70 ? "MUITO ATIVO" : "ATIVO";
+            const meta = [a.role, a.party, a.handle ? `@${a.handle.replace(/^@/, "")}` : null]
+              .filter(Boolean)
+              .join(" · ");
+            const tags = Array.isArray(a.top_topics) ? (a.top_topics as string[]) : [];
+            const plays = Array.isArray(a.recent_actions)
+              ? (a.recent_actions as { date: string; action: string }[]).map((x) => ({
+                  when: x.date,
+                  text: x.action,
+                }))
+              : [];
+            return (
+              <AdversaryCard
+                key={a.id}
+                initials={initialsOf(a.display_name)}
+                tone={tone}
+                name={a.display_name}
+                badge={badge}
+                meta={meta || "—"}
+                score={a.activity_score}
+                tags={tags}
+                plays={plays}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {top && top.activity_score > 0 && (
+        <AiHint>
+          <b>{top.display_name}</b> é quem concentra mais atividade mapeada no momento (score{" "}
+          {top.activity_score}).
+        </AiHint>
+      )}
 
       {/* Instagram monitorado */}
       <div className="mt-5 overflow-hidden rounded-[13px] border border-v2-line bg-v2-card">
@@ -113,27 +260,33 @@ function TabAdversarios() {
           <span className="text-[14px] font-[650] text-v2-ink">📸 Instagram monitorado</span>
           <button className="text-[12.5px] font-[650] text-v2-green">＋ Adicionar handle</button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3">
-          <InstaHandle
-            handle="@parimoschi"
-            meta="Opositor · scan 6/6h"
-            status="● ok · último scan 13:40"
-            ok
-            border
-          />
-          <InstaHandle
-            handle="@tribunajundiai"
-            meta="Imprensa · scan 6/6h"
-            status="● ok · último scan 13:38"
-            ok
-            border
-          />
-          <InstaHandle
-            handle="@carlabertolli"
-            meta="Opositora · scan 6/6h"
-            status="⚠ perfil privado — sem acesso"
-          />
-        </div>
+        {igLoading && <div className="px-5 py-3.5 text-[12px] text-v2-ink-3">Carregando…</div>}
+        {!igLoading && igTargets.length === 0 && (
+          <div className="px-5 py-3.5 text-[12px] text-v2-ink-3">Nenhum handle cadastrado.</div>
+        )}
+        {igTargets.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3">
+            {igTargets.map((t, i) => {
+              const isOk = t.last_status === "ok" && !!t.last_scanned_at;
+              const status =
+                t.last_status && t.last_status !== "ok"
+                  ? `⚠ ${t.last_status}`
+                  : t.last_scanned_at
+                    ? `● ok · último scan ${new Date(t.last_scanned_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                    : "○ aguardando primeiro scan";
+              return (
+                <InstaHandle
+                  key={t.id}
+                  handle={`@${t.handle.replace(/^@/, "")}`}
+                  meta={`${KIND_LABEL[t.kind]} · ${t.active ? "ativo" : "pausado"}`}
+                  status={status}
+                  ok={isOk}
+                  border={i % 3 !== 2 && i !== igTargets.length - 1}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -184,23 +337,28 @@ function AdversaryCard({
           <div className="font-mono text-[9px] tracking-[0.08em] text-v2-faint">ATIVIDADE</div>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {tags.map((t) => (
-          <span
-            key={t}
-            className="rounded-full bg-v2-track px-[9px] py-[3px] text-[11.5px] text-v2-ink-2"
-          >
-            {t}
-          </span>
-        ))}
-      </div>
+      {tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {tags.map((t) => (
+            <span
+              key={t}
+              className="rounded-full bg-v2-track px-[9px] py-[3px] text-[11.5px] text-v2-ink-2"
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="mt-3.5 border-t border-v2-track pt-3">
         <div className="font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
           ÚLTIMAS JOGADAS
         </div>
+        {plays.length === 0 && (
+          <div className="mt-1.5 text-[12.5px] text-v2-faint">Sem atividades registradas.</div>
+        )}
         {plays.map((p) => (
           <div
-            key={p.text}
+            key={p.when + p.text}
             className="mt-1.5 flex gap-2.5 text-[12.5px] text-v2-ink-2 first-of-type:mt-[7px]"
           >
             <span className="w-[46px] flex-none font-mono text-[10.5px] text-v2-faint">
@@ -240,7 +398,73 @@ function InstaHandle({
 
 /* ─────────────────────────── Aba Pessoas (S23) ─────────────────────────── */
 
-function TabPessoas() {
+type Member = {
+  id: string;
+  display_name: string;
+  role: string;
+  neighborhood: string | null;
+  tags: string[];
+};
+
+type MemberStat = {
+  member_id: string;
+  message_count: number | null;
+  avg_sentiment: number | null;
+};
+
+function TabPessoas({ orgId }: { orgId: string }) {
+  const {
+    data: members = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["tracked-members-rede", orgId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("tracked_members")
+        .select("id, display_name, role, neighborhood, tags")
+        .eq("org_id", orgId)
+        .order("display_name");
+      return (data ?? []) as Member[];
+    },
+  });
+
+  const { data: stats = [] } = useQuery({
+    queryKey: ["member-stats-30d", orgId],
+    queryFn: async () => {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("member_daily_stats")
+        .select("member_id, message_count, avg_sentiment")
+        .eq("org_id", orgId)
+        .gte("bucket_date", cutoff);
+      return (data ?? []) as MemberStat[];
+    },
+  });
+
+  const agg = useMemo(() => {
+    const map = new Map<string, { msgs: number; sent: number; sentN: number }>();
+    stats.forEach((s) => {
+      const a = map.get(s.member_id) ?? { msgs: 0, sent: 0, sentN: 0 };
+      a.msgs += s.message_count ?? 0;
+      if (s.avg_sentiment != null) {
+        a.sent += Number(s.avg_sentiment);
+        a.sentN++;
+      }
+      map.set(s.member_id, a);
+    });
+    return map;
+  }, [stats]);
+
+  const topByMsgs = useMemo<{ name: string; msgs: number } | null>(() => {
+    let best: { name: string; msgs: number } | null = null;
+    members.forEach((m) => {
+      const msgs = agg.get(m.id)?.msgs ?? 0;
+      if (msgs > 0 && (!best || msgs > best.msgs)) best = { name: m.display_name, msgs };
+    });
+    return best;
+  }, [members, agg]);
+
   return (
     <div>
       {/* Toolbar */}
@@ -260,6 +484,12 @@ function TabPessoas() {
         </button>
       </div>
 
+      {isError && (
+        <div className="mb-3 text-[12.5px] text-v2-crit">
+          Não foi possível carregar as pessoas monitoradas. Tente novamente.
+        </div>
+      )}
+
       {/* Tabela */}
       <div className="overflow-hidden rounded-[13px] border border-v2-line bg-v2-card">
         <div className="grid grid-cols-[1.8fr_1fr_1fr_0.7fr_0.8fr_0.7fr] gap-3 border-b border-v2-line px-5 py-[11px] font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
@@ -270,53 +500,63 @@ function TabPessoas() {
           <span>SENTIMENTO</span>
           <span>SINAL</span>
         </div>
-        <PersonRow
-          initials="DS"
-          avatarTone="green"
-          name="Dona Sônia"
-          sub="líder comunitária"
-          role="Liderança de bairro"
-          bairro="📍 Vila Rami"
-          msgs="214"
-          sentiment="−0.48 ▼"
-          sentimentTone="crit"
-          signal="MOBILIZANDO"
-          signalTone="crit"
-          border
-        />
-        <PersonRow
-          initials="PM"
-          avatarTone="neutral"
-          name="Pastor Miguel"
-          sub="influente em 4 grupos"
-          role="Liderança religiosa"
-          bairro="📍 Retiro"
-          msgs="96"
-          sentiment="−0.05 —"
-          sentimentTone="obs"
-          signal="NEUTRO"
-          signalTone="obs"
-          border
-        />
-        <PersonRow
-          initials="CA"
-          avatarTone="green"
-          name="Carlão do Esporte"
-          sub="apoiador declarado"
-          role="Militante"
-          bairro="📍 Centro"
-          msgs="142"
-          sentiment="+0.42 ▲"
-          sentimentTone="green"
-          signal="DEFENDENDO"
-          signalTone="green"
-        />
+
+        {isLoading && <div className="px-5 py-3.5 text-[12.5px] text-v2-ink-3">Carregando…</div>}
+
+        {!isLoading && members.length === 0 && (
+          <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
+            Nenhuma pessoa cadastrada.
+          </div>
+        )}
+
+        {members.map((m, i) => {
+          const a = agg.get(m.id);
+          const hasStats = !!a && a.sentN > 0;
+          const sent = hasStats ? a!.sent / a!.sentN : 0;
+          const sentimentLabel = hasStats
+            ? `${sent >= 0 ? "+" : "−"}${Math.abs(sent).toFixed(2)} ${sent > 0.05 ? "▲" : sent < -0.05 ? "▼" : "—"}`
+            : "— sem dados";
+          const sentimentTone = !hasStats
+            ? "obs"
+            : sent > 0.05
+              ? "green"
+              : sent < -0.05
+                ? "crit"
+                : "obs";
+          const signal = !hasStats
+            ? "SEM DADOS"
+            : sent > 0.05
+              ? "SENTIMENTO POSITIVO"
+              : sent < -0.05
+                ? "SENTIMENTO NEGATIVO"
+                : "NEUTRO";
+          const signalTone = sentimentTone;
+          return (
+            <PersonRow
+              key={m.id}
+              initials={initialsOf(m.display_name)}
+              avatarTone={hasStats && sent > 0.05 ? "green" : "neutral"}
+              name={m.display_name}
+              sub={(m.tags ?? [])[0] ?? ""}
+              role={m.role.replace(/_/g, " ")}
+              bairro={m.neighborhood ? `📍 ${m.neighborhood}` : "— sem bairro"}
+              msgs={String(a?.msgs ?? 0)}
+              sentiment={sentimentLabel}
+              sentimentTone={sentimentTone}
+              signal={signal}
+              signalTone={signalTone}
+              border={i < members.length - 1}
+            />
+          );
+        })}
       </div>
 
-      <AiHint>
-        <b>Dona Sônia</b> (Vila Rami) organizou o abaixo-assinado da enchente — é a voz a ouvir na
-        visita de hoje.
-      </AiHint>
+      {topByMsgs && (
+        <AiHint>
+          <b>{topByMsgs.name}</b> é quem mais gerou mensagens monitoradas nos últimos 30 dias (
+          {topByMsgs.msgs}).
+        </AiHint>
+      )}
     </div>
   );
 }
@@ -375,10 +615,10 @@ function PersonRow({
         </span>
         <div>
           <div className="text-[13.5px] font-semibold text-v2-ink">{name}</div>
-          <div className="font-mono text-[10.5px] text-v2-faint">{sub}</div>
+          {sub && <div className="font-mono text-[10.5px] text-v2-faint">{sub}</div>}
         </div>
       </div>
-      <span className="text-[12.5px] text-v2-ink-2">{role}</span>
+      <span className="text-[12.5px] capitalize text-v2-ink-2">{role}</span>
       <span className="text-[12.5px] text-v2-ink-2">{bairro}</span>
       <span className="font-mono text-[12px] text-v2-ink">{msgs}</span>
       <span className={`font-mono text-[12px] ${SENTIMENT_TONE[sentimentTone]}`}>{sentiment}</span>
@@ -393,24 +633,106 @@ function PersonRow({
 
 /* ─────────────────────────── Aba Grupos (S10) ─────────────────────────── */
 
-function TabGrupos() {
+function TabGrupos({ orgId }: { orgId: string }) {
+  const qc = useQueryClient();
+  const [instanceId, setInstanceId] = useState<string | undefined>();
+  const [search, setSearch] = useState("");
+
+  const { data: instances = [] } = useQuery({
+    queryKey: ["instances", orgId],
+    queryFn: () => listInstances({ data: { orgId } }),
+  });
+  const activeInstance = instanceId ?? instances[0]?.id;
+
+  const {
+    data: groups = [],
+    isLoading,
+    isFetching,
+  } = useQuery({
+    queryKey: ["groups", orgId, activeInstance],
+    queryFn: () => listGroups({ data: { orgId, instanceId: activeInstance } }),
+    enabled: !!activeInstance,
+  });
+
+  const refresh = useMutation({
+    mutationFn: () => refreshGroups({ data: { orgId, instanceId: activeInstance! } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["groups", orgId, activeInstance] }),
+  });
+
+  const toggle = useMutation({
+    mutationFn: (vars: { groupId: string; monitored: boolean; tag: string | null }) =>
+      toggleGroupMonitoring({
+        data: {
+          orgId,
+          groupId: vars.groupId,
+          monitored: vars.monitored,
+          neighborhoodTag: vars.tag,
+        },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["groups", orgId, activeInstance] }),
+  });
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) => {
+      if ((g.subject ?? "").toLowerCase().includes(q)) return true;
+      if ((g.neighborhood_tag ?? "").toLowerCase().includes(q)) return true;
+      if ((g.tags ?? []).some((t) => t.toLowerCase().includes(q))) return true;
+      return false;
+    });
+  }, [groups, search]);
+
+  const monitoredCount = groups.filter((g) => g.is_monitored).length;
+  const missingNeighborhood = groups.filter((g) => g.is_monitored && !g.neighborhood_tag).length;
+
+  if (instances.length === 0) {
+    return (
+      <div className="rounded-[13px] border border-v2-line bg-v2-card px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
+        Conecte uma instância WhatsApp em Ajustes → WhatsApp para começar.
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <div className="flex w-[300px] items-center gap-2 rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[13px] text-v2-ink-3">
-          ⌕ Buscar por nome, bairro ou tag…
+          ⌕
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, bairro ou tag…"
+            className="w-full bg-transparent text-[13px] text-v2-ink outline-none placeholder:text-v2-ink-3"
+          />
         </div>
-        <button className="rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[12.5px] font-semibold text-v2-ink-2">
-          Instância: Gabinete ⌄
-        </button>
-        <span className="rounded-full border border-v2-crit/25 bg-v2-crit-bg/50 px-3 py-2 text-[12.5px] font-semibold text-v2-crit">
-          ⚠ 3 sem bairro
-        </span>
+        <select
+          value={activeInstance}
+          onChange={(e) => setInstanceId(e.target.value)}
+          className="rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[12.5px] font-semibold text-v2-ink-2 outline-none"
+        >
+          {instances.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.instance_name}
+            </option>
+          ))}
+        </select>
+        {missingNeighborhood > 0 && (
+          <span className="rounded-full border border-v2-crit/25 bg-v2-crit-bg/50 px-3 py-2 text-[12.5px] font-semibold text-v2-crit">
+            ⚠ {missingNeighborhood} sem bairro
+          </span>
+        )}
         <div className="flex-1" />
-        <span className="font-mono text-[11px] text-v2-ink-3">136 monitorados de 142</span>
-        <button className="rounded-lg border border-v2-line-strong bg-v2-card px-3.5 py-2 text-[13px] font-[650] text-v2-ink">
-          ↻ Sincronizar
+        <span className="font-mono text-[11px] text-v2-ink-3">
+          {monitoredCount} monitorados de {groups.length}
+        </span>
+        <button
+          onClick={() => refresh.mutate()}
+          disabled={refresh.isPending || !activeInstance}
+          className="rounded-lg border border-v2-line-strong bg-v2-card px-3.5 py-2 text-[13px] font-[650] text-v2-ink disabled:opacity-50"
+        >
+          ↻ {refresh.isPending ? "Sincronizando…" : "Sincronizar"}
         </button>
       </div>
 
@@ -424,65 +746,52 @@ function TabGrupos() {
           <span className="text-right">MONITORAR</span>
         </div>
 
-        <GroupRow
-          initials="MV"
-          avatarTone="green"
-          name="Moradores Vila Rami"
-          members="248 participantes"
-          bairro={<span className="text-[12.5px] text-v2-ink">📍 Vila Rami</span>}
-          tags={["zona norte"]}
-          msgs="438 ▲"
-          msgsTone="crit"
-          on
-          border
-        />
-        <GroupRow
-          initials="V2"
-          avatarTone="neutral"
-          name="Moradores Vila Rami 2"
-          members="104 participantes"
-          bairro={<span className="text-[12.5px] font-[650] text-v2-crit">⚠ Vincular bairro…</span>}
-          tags={[]}
-          msgs="96"
-          msgsTone="obs"
-          on
-          border
-          highlight
-        />
-        <GroupRow
-          initials="RC"
-          avatarTone="neutral"
-          name="Retiro Comunidade"
-          members="312 participantes"
-          bairro={<span className="text-[12.5px] text-v2-ink">📍 Retiro</span>}
-          tags={["saúde", "zona norte"]}
-          msgs="265 ▲"
-          msgsTone="warn"
-          on
-          border
-        />
-        <GroupRow
-          initials="FC"
-          avatarTone="neutral"
-          name="Feira do Centro — avisos"
-          members="89 participantes"
-          bairro={<span className="text-[12.5px] text-v2-ink-3">📍 Centro</span>}
-          tags={[]}
-          msgs="12"
-          msgsTone="faint"
-          muted
-        />
+        {(isLoading || isFetching) && groups.length === 0 && (
+          <div className="px-5 py-3.5 text-[12.5px] text-v2-ink-3">Carregando…</div>
+        )}
+
+        {!isLoading && groups.length === 0 && (
+          <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
+            Nenhum grupo. Clique em "Sincronizar" para importar da instância.
+          </div>
+        )}
+
+        {groups.length > 0 && filtered.length === 0 && (
+          <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
+            Nenhum grupo corresponde ao filtro.
+          </div>
+        )}
+
+        {filtered.map((g, i) => (
+          <GroupRow
+            key={g.id}
+            initials={(g.subject ?? "?").slice(0, 2).toUpperCase()}
+            avatarTone={g.is_monitored ? "green" : "neutral"}
+            name={g.subject ?? "Sem nome"}
+            members={`${g.participant_count ?? 0} participantes`}
+            bairro={
+              g.neighborhood_tag ? (
+                <span className="text-[12.5px] text-v2-ink">📍 {g.neighborhood_tag}</span>
+              ) : (
+                <span className="text-[12.5px] font-[650] text-v2-crit">
+                  ⚠ sem bairro vinculado
+                </span>
+              )
+            }
+            tags={g.tags ?? []}
+            on={g.is_monitored ?? false}
+            onToggle={(checked) =>
+              toggle.mutate({ groupId: g.id, monitored: checked, tag: g.neighborhood_tag ?? null })
+            }
+            border={i < filtered.length - 1}
+            highlight={!!g.is_monitored && !g.neighborhood_tag}
+            muted={!g.is_monitored}
+          />
+        ))}
       </div>
     </div>
   );
 }
-
-const MSGS_TONE: Record<string, string> = {
-  crit: "text-v2-crit",
-  warn: "text-v2-warn",
-  obs: "text-v2-ink-3",
-  faint: "text-v2-faint",
-};
 
 function GroupRow({
   initials,
@@ -491,9 +800,8 @@ function GroupRow({
   members,
   bairro,
   tags,
-  msgs,
-  msgsTone,
   on,
+  onToggle,
   border,
   highlight,
   muted,
@@ -504,9 +812,8 @@ function GroupRow({
   members: string;
   bairro: React.ReactNode;
   tags: string[];
-  msgs: string;
-  msgsTone: string;
-  on?: boolean;
+  on: boolean;
+  onToggle: (checked: boolean) => void;
   border?: boolean;
   highlight?: boolean;
   muted?: boolean;
@@ -537,26 +844,27 @@ function GroupRow({
           </span>
         ))}
       </div>
-      <span className={`font-mono text-[12px] ${MSGS_TONE[msgsTone]}`}>{msgs}</span>
+      {/* MSGS 7D não tem correspondência no schema (whatsapp_groups não guarda contagem
+          de mensagens) — estado vazio honesto em vez de número inventado. */}
+      <span className="font-mono text-[12px] text-v2-faint">—</span>
       <div className="text-right">
-        <Toggle on={!!on} />
+        <Toggle on={on} onChange={onToggle} />
       </div>
     </div>
   );
 }
 
-function Toggle({ on }: { on: boolean }) {
-  const [checked, setChecked] = useState(on);
+function Toggle({ on, onChange }: { on: boolean; onChange: (checked: boolean) => void }) {
   return (
     <button
       role="switch"
-      aria-checked={checked}
+      aria-checked={on}
       aria-label="Monitorar grupo"
-      onClick={() => setChecked((c) => !c)}
-      className={`relative inline-block h-5 w-[34px] rounded-full transition-colors ${checked ? "bg-v2-green" : "bg-v2-line-strong"}`}
+      onClick={() => onChange(!on)}
+      className={`relative inline-block h-5 w-[34px] rounded-full transition-colors ${on ? "bg-v2-green" : "bg-v2-line-strong"}`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${checked ? "right-0.5" : "left-0.5"}`}
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${on ? "right-0.5" : "left-0.5"}`}
       />
     </button>
   );
