@@ -1,142 +1,224 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { listAlerts, acknowledgeAlert } from "@/lib/dashboard.functions";
+import { resolveAlert } from "@/lib/alerts.functions";
+import { useCurrentOrg } from "@/lib/use-current-org";
 
 export const Route = createFileRoute("/v2/alertas/$alertId")({
   head: () => ({ meta: [{ title: "Alerta — Inpol v2" }] }),
   component: AlertaDetalhe,
 });
 
-type Step = {
-  id: number;
-  title: string;
-  detail?: string;
-  doneNote?: string;
-  deadline?: string;
-  urgent?: boolean;
-  actions?: boolean;
+/** S4 — Alerta: roteiro de ação + comparativo sem/com inPol.
+ * Cabeçalho, badges e ação recomendada vêm de `listAlerts` (não há um `getAlert`
+ * dedicado na assinatura autorizada, então buscamos a lista completa da org —
+ * incluindo reconhecidos — e filtramos pelo id da rota). Abrir o alerta o
+ * reconhece automaticamente (não existe botão "Reconhecer" no design; ver nota
+ * abaixo). "Resolver" fica disponível no painel de progresso.
+ * O roteiro passo-a-passo, o comparativo sem/com Inpol e as "mensagens-chave"
+ * continuam ilustrativos: o backend autorizado não expõe passos de ação
+ * granulares nem o conteúdo das mensagens de evidência — apenas
+ * `recommended_action` como texto único.
+ */
+
+type AlertRow = {
+  id: string;
+  level: string;
+  topic: string;
+  neighborhood: string | null;
+  summary: string | null;
+  recommended_action: string | null;
+  evidence_message_ids: string[] | null;
+  acknowledged_at: string | null;
+  created_at: string;
 };
 
-const STEPS: Step[] = [
-  { id: 1, title: "Confirmar situação com a Defesa Civil", doneNote: "concluído 09:40 · Marina" },
+const TIMELINE_BAD = [
   {
-    id: 2,
-    title: "Publicar pronunciamento oficial reconhecendo o problema",
-    detail: "Rascunho pronto pela IA — revise e publique no Instagram e nos grupos oficiais.",
-    deadline: "até 11:00",
-    urgent: true,
-    actions: true,
+    day: "Seg · manhã",
+    text: "Primeiras reclamações em um grupo. Assessor lê de relance. Acha pontual.",
   },
   {
-    id: 3,
-    title: "Enviar secretário de Obras à Vila Rami com equipe de imprensa",
-    deadline: "até 14:00",
+    day: "Ter",
+    text: "Mais reclamações em grupos diferentes. Comentário ácido em matéria local. Ninguém alerta o prefeito.",
   },
-  {
-    id: 4,
-    title: "Responder à Tribuna com posicionamento + cronograma de obra",
-    deadline: "até 16:00",
-  },
-  {
-    id: 5,
-    title: "Publicar follow-up com fotos da ação nos grupos dos bairros",
-    deadline: "amanhã",
-  },
+  { day: "Qua", text: "Oposição compartilha os prints. Centenas de compartilhamentos em horas." },
+  { day: "Qui · noite", text: "Imprensa liga pedindo posicionamento oficial." },
+  { day: "Sex", text: "Manchete negativa. Prefeitura reage tarde demais." },
+];
+const TIMELINE_GOOD = [
+  { day: "Seg", text: "Alerta no relatório: tema identificado. Estágio: monitorando." },
+  { day: "Ter · manhã", text: "Gabinete reúne responsável. Identifica a causa raiz." },
+  { day: "Qua · manhã", text: "Visita oficial ao local. Equipe documenta solução em andamento." },
+  { day: "Qui", text: "Publicação oficial reconhecendo o problema e a ação em curso." },
+  { day: "Sex", text: "Manchete positiva. Mesma cidade, mesma semana, narrativa invertida." },
 ];
 
-/** S4 — Alerta: roteiro de ação com checklist acionável + comparativo sem/com inPol. Demo data. */
+function levelMeta(level: string) {
+  if (level === "vermelho")
+    return { label: "CRÍTICO", badge: "bg-v2-crit-bg text-v2-crit", ink: "text-v2-crit" };
+  if (level === "laranja")
+    return { label: "ATENÇÃO", badge: "bg-v2-warn-bg text-v2-warn", ink: "text-v2-warn" };
+  return { label: "OBSERVAÇÃO", badge: "bg-v2-obs-bg text-v2-obs", ink: "text-v2-obs" };
+}
+
 function AlertaDetalhe() {
-  const [done, setDone] = useState<Set<number>>(() => new Set([1]));
-  const toggle = (id: number) =>
-    setDone((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const { alertId } = Route.useParams();
+  const { orgId } = useCurrentOrg();
+  const qc = useQueryClient();
+
+  const {
+    data: alerts,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["alerts", orgId, "all"],
+    queryFn: () => listAlerts({ data: { orgId: orgId as string, includeAcked: true } }),
+    enabled: !!orgId,
+  });
+
+  const alert = (alerts as AlertRow[] | undefined)?.find((a) => a.id === alertId);
+
+  const ack = useMutation({
+    mutationFn: () => acknowledgeAlert({ data: { orgId: orgId as string, alertId } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["alerts", orgId] });
+    },
+  });
+  const resolve = useMutation({
+    mutationFn: () => resolveAlert({ data: { alertId } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["alerts", orgId] });
+    },
+  });
+
+  // Abrir o alerta reconhece automaticamente — não há botão "Reconhecer" no design.
+  useEffect(() => {
+    if (alert && !alert.acknowledged_at && orgId && !ack.isPending) {
+      ack.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alert?.id, alert?.acknowledged_at, orgId]);
+
+  if (isLoading) {
+    return (
+      <div>
+        <BackLink />
+        <div className="mt-6 text-[13.5px] text-v2-ink-3">Carregando alerta…</div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div>
+        <BackLink />
+        <div className="mt-6 text-[13.5px] text-v2-crit">
+          Não foi possível carregar este alerta. Tente novamente.
+        </div>
+      </div>
+    );
+  }
+
+  if (!alert) {
+    return (
+      <div>
+        <BackLink />
+        <div className="mt-10 flex flex-col items-center gap-2 rounded-[13px] border border-v2-line bg-v2-card px-6 py-12 text-center">
+          <span className="text-[28px]">🔍</span>
+          <h1 className="text-[17px] font-[650] text-v2-ink">Alerta não encontrado</h1>
+          <p className="max-w-sm text-[13px] text-v2-ink-3">
+            Este alerta pode ter sido removido ou o link está incorreto.
+          </p>
+          <Link
+            to="/v2/alertas"
+            className="mt-2 rounded-lg border border-v2-line-strong bg-v2-card px-3.5 py-2 text-[13px] font-[650] text-v2-ink"
+          >
+            Voltar para alertas
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const meta = levelMeta(alert.level);
+  const evidenceCount = alert.evidence_message_ids?.length ?? 0;
 
   return (
     <div>
-      <Link to="/v2/alertas" className="text-[13px] text-v2-ink-3 hover:text-v2-green">
-        ← Voltar para alertas
-      </Link>
+      <BackLink />
 
       {/* Header + progress */}
       <div className="mt-4 flex flex-col items-start justify-between gap-5 md:flex-row">
         <div className="max-w-[600px]">
           <div className="flex items-center gap-2.5">
-            <span className="rounded bg-v2-crit-bg px-[9px] py-1 font-mono text-[10.5px] font-bold tracking-[0.08em] text-v2-crit">
-              CRÍTICO
+            <span
+              className={`rounded px-[9px] py-1 font-mono text-[10.5px] font-bold tracking-[0.08em] ${meta.badge}`}
+            >
+              {meta.label}
             </span>
-            <span className="font-mono text-[11px] font-semibold tracking-[0.06em] text-v2-crit">
-              ⏱ JANELA: ATÉ 12:00
-            </span>
+            {alert.acknowledged_at && (
+              <span className="font-mono text-[11px] font-semibold tracking-[0.06em] text-v2-ink-3">
+                ✓ reconhecido
+              </span>
+            )}
           </div>
           <h1 className="mt-2.5 text-[26px] font-[650] leading-[1.25] tracking-[-0.015em] text-v2-ink">
-            Enchente na Vila Rami sem resposta da prefeitura
+            {alert.topic}
           </h1>
-          <p className="mt-2 text-[14px] leading-[1.6] text-v2-ink-2">
-            214 mensagens em 6 grupos citam abandono. Vídeo com 3,2 mil compartilhamentos; Tribuna
-            de Jundiaí sondando moradores para matéria.
-          </p>
+          {alert.summary && (
+            <p className="mt-2 text-[14px] leading-[1.6] text-v2-ink-2">{alert.summary}</p>
+          )}
           <div className="mt-2.5 flex flex-wrap gap-4 whitespace-nowrap font-mono text-[11.5px] text-v2-ink-3">
-            <span>📍 Vila Rami</span>
-            <span>💬 214 msgs</span>
-            <span>📈 sent −0.55</span>
-            <span>desde qui 22:14</span>
+            {alert.neighborhood && <span>📍 {alert.neighborhood}</span>}
+            {evidenceCount > 0 && <span>💬 {evidenceCount} msgs</span>}
+            <span>desde {format(new Date(alert.created_at), "EEE HH:mm", { locale: ptBR })}</span>
           </div>
         </div>
 
         <div className="w-full flex-none rounded-xl border border-v2-line bg-v2-card px-[18px] py-4 md:w-[250px]">
           <div className="font-mono text-[10px] font-semibold tracking-[0.1em] text-v2-faint">
-            PROGRESSO DO ROTEIRO
+            STATUS
           </div>
-          <div className="mt-1.5 flex items-baseline gap-1.5">
-            <span className="text-[26px] font-[650] text-v2-ink">
-              {done.size}
-              <span className="text-v2-faint">/5</span>
-            </span>
-            <span className="text-[12px] text-v2-ink-3">passos concluídos</span>
+          <div className="mt-1.5 text-[14px] font-[650] text-v2-ink">
+            {alert.acknowledged_at ? "Reconhecido" : "Novo"}
           </div>
-          <div className="mt-2.5 h-1.5 rounded-[3px] bg-v2-track">
-            <div
-              className="h-full rounded-[3px] bg-v2-green transition-all"
-              style={{ width: `${(done.size / 5) * 100}%` }}
-            />
-          </div>
-          <div className="mt-2.5 text-[12px] text-v2-ink-3">
-            Responsável: <b className="text-v2-ink">Marina C.</b>
-          </div>
+          <button
+            onClick={() => resolve.mutate()}
+            disabled={resolve.isPending}
+            className="mt-3.5 w-full rounded-lg bg-v2-green px-3.5 py-2 text-center text-[13px] font-[650] text-white disabled:opacity-60"
+          >
+            {resolve.isPending
+              ? "Resolvendo…"
+              : resolve.isSuccess
+                ? "✓ Resolvido"
+                : "✓ Marcar como resolvido"}
+          </button>
         </div>
       </div>
 
       {/* Two columns */}
       <div className="mt-[26px] grid grid-cols-1 gap-5 lg:grid-cols-[1.25fr_1fr]">
-        {/* Left: checklist */}
+        {/* Left: recommended action */}
         <div>
           <div className="mb-2.5 font-mono text-[11px] font-bold tracking-[0.1em] text-v2-ink-3">
-            ROTEIRO DE AÇÃO · GERADO PELA IA ÀS 09:12
+            AÇÃO RECOMENDADA
           </div>
-          <div className="overflow-hidden rounded-[13px] border border-v2-line bg-v2-card">
-            {STEPS.map((step, i) => (
-              <ChecklistRow
-                key={step.id}
-                step={step}
-                done={done.has(step.id)}
-                onToggle={() => toggle(step.id)}
-                last={i === STEPS.length - 1}
-              />
-            ))}
-          </div>
-          <div className="mt-3 flex items-center gap-3 rounded-xl border border-v2-green-border bg-v2-green-tint px-4 py-[13px]">
-            <span>✦</span>
-            <span className="flex-1 text-[12.5px] leading-[1.5] text-v2-green-ink">
-              Casos parecidos (UBS Maringá, mar/2026) resolvidos em 48h quando o passo 2 saiu antes
-              do meio-dia.
-            </span>
+          <div className="overflow-hidden rounded-[13px] border border-v2-line bg-v2-card px-[18px] py-4">
+            {alert.recommended_action ? (
+              <p className="text-[14px] leading-[1.6] text-v2-ink">{alert.recommended_action}</p>
+            ) : (
+              <p className="text-[13px] text-v2-ink-3">
+                Nenhuma ação recomendada gerada para este alerta.
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Right: why act now + key messages */}
+        {/* Right: why act now */}
         <div>
           <div className="mb-2.5 font-mono text-[11px] font-bold tracking-[0.1em] text-v2-ink-3">
             POR QUE AGIR AGORA
@@ -147,46 +229,30 @@ function AlertaDetalhe() {
                 <div className="font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-crit">
                   SEM AÇÃO
                 </div>
-                <p className="mt-1.5 text-[12.5px] leading-[1.55] text-v2-ink-2">
-                  Qui: vídeo viraliza → Sex: vereador reposta → Sáb:{" "}
-                  <b className="text-v2-crit">manchete negativa</b> e narrativa da oposição pronta.
-                </p>
+                <div className="mt-1.5 flex flex-col gap-2">
+                  {TIMELINE_BAD.slice(0, 3).map((s, i) => (
+                    <p key={i} className="text-[12.5px] leading-[1.55] text-v2-ink-2">
+                      <b className="text-v2-ink-3">{s.day}:</b> {s.text}
+                    </p>
+                  ))}
+                </div>
               </div>
               <div className="flex-1 pl-3.5">
                 <div className="font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-green">
-                  COM O ROTEIRO
+                  COM AÇÃO
                 </div>
-                <p className="mt-1.5 text-[12.5px] leading-[1.55] text-v2-ink-2">
-                  Hoje: pronunciamento + visita → Sáb:{" "}
-                  <b className="text-v2-green">"Prefeitura age rápido na Vila Rami"</b>. Mesma
-                  semana, manchete invertida.
-                </p>
+                <div className="mt-1.5 flex flex-col gap-2">
+                  {TIMELINE_GOOD.slice(0, 3).map((s, i) => (
+                    <p key={i} className="text-[12.5px] leading-[1.55] text-v2-ink-2">
+                      <b className="text-v2-ink-3">{s.day}:</b> {s.text}
+                    </p>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="border-t border-v2-track pt-3 font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
-              LINHA DO TEMPO DO TEMA
+            <div className="border-t border-v2-track pt-3 text-[11.5px] leading-[1.5] text-v2-ink-3">
+              Comparativo ilustrativo baseado em casos semelhantes.
             </div>
-            <div className="mt-2 flex flex-col gap-[7px] text-[12.5px] text-v2-ink-2">
-              <TimelineRow at="qui 22:14">primeiras 12 reclamações em 2 grupos</TimelineRow>
-              <TimelineRow at="sex 06:30">vídeo do alagamento começa a circular</TimelineRow>
-              <TimelineRow at="sex 08:05">3,2 mil shares · 6 grupos · sent −0.55</TimelineRow>
-              <TimelineRow at="sex 09:12" crit>
-                <b className="text-v2-crit">escalado para CRÍTICO</b>
-              </TimelineRow>
-            </div>
-          </div>
-
-          <div className="mt-3 rounded-[13px] border border-v2-line bg-v2-card px-[18px] py-4">
-            <div className="font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
-              MENSAGENS-CHAVE (3 DE 214)
-            </div>
-            <p className="mt-2 text-[12.5px] italic leading-[1.55] text-v2-ink-2">
-              "terceira vez que alaga e ninguém aparece, cadê o prefeito?"
-            </p>
-            <p className="mt-2 text-[12.5px] italic leading-[1.55] text-v2-ink-2">
-              "na chuva de ontem perdi o sofá, a prefeitura prometeu a galeria em 2024"
-            </p>
-            <button className="mt-2.5 text-[12.5px] font-[650] text-v2-green">Ver todas →</button>
           </div>
         </div>
       </div>
@@ -194,101 +260,10 @@ function AlertaDetalhe() {
   );
 }
 
-function ChecklistRow({
-  step,
-  done,
-  onToggle,
-  last,
-}: {
-  step: Step;
-  done: boolean;
-  onToggle: () => void;
-  last: boolean;
-}) {
+function BackLink() {
   return (
-    <div
-      className={`flex gap-[13px] px-[18px] py-[15px] ${!last ? "border-b border-v2-track" : ""}`}
-      style={
-        done
-          ? {
-              background:
-                "color-mix(in srgb, var(--color-v2-card) 62%, var(--color-v2-green-tint))",
-            }
-          : undefined
-      }
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-pressed={done}
-        aria-label={done ? `Desmarcar: ${step.title}` : `Concluir: ${step.title}`}
-        className={`grid h-5 w-5 flex-none place-items-center rounded-md text-[11px] ${
-          done
-            ? "bg-v2-green text-white"
-            : step.urgent
-              ? "border-2 border-v2-crit"
-              : "border-2 border-v2-line-strong"
-        }`}
-      >
-        {done ? "✓" : ""}
-      </button>
-      <div className="flex-1">
-        <div
-          className={`text-[14px] ${
-            done
-              ? "font-semibold text-v2-ink-3 line-through"
-              : step.urgent
-                ? "font-[650] text-v2-ink"
-                : "font-semibold text-v2-ink"
-          }`}
-        >
-          {step.title}
-        </div>
-        {done && step.doneNote && (
-          <div className="mt-0.5 text-[12px] text-v2-faint">{step.doneNote}</div>
-        )}
-        {!done && step.detail && (
-          <div className="mt-[3px] text-[12.5px] leading-[1.5] text-v2-ink-2">{step.detail}</div>
-        )}
-        {!done && step.actions && (
-          <div className="mt-2 flex gap-2">
-            <button className="rounded-[7px] bg-v2-ink px-3 py-1.5 text-[12px] font-[650] text-white">
-              Ver rascunho
-            </button>
-            <button className="px-1 py-1.5 text-[12px] font-[650] text-v2-ink-3">
-              Atribuir a alguém
-            </button>
-          </div>
-        )}
-      </div>
-      {!done && step.deadline && (
-        <span
-          className={`flex-none font-mono text-[10.5px] ${step.urgent ? "text-v2-crit" : "text-v2-faint"}`}
-        >
-          {step.deadline}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function TimelineRow({
-  at,
-  crit,
-  children,
-}: {
-  at: string;
-  crit?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex gap-2.5">
-      <span
-        className={`w-16 flex-none font-mono text-[10.5px] ${crit ? "text-v2-crit" : "text-v2-faint"}`}
-      >
-        {at}
-      </span>
-      <span>{children}</span>
-    </div>
+    <Link to="/v2/alertas" className="text-[13px] text-v2-ink-3 hover:text-v2-green">
+      ← Voltar para alertas
+    </Link>
   );
 }
