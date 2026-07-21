@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { V2Logo } from "./logo";
 import { V2_NAV } from "./nav-items";
 import { V2Notifications } from "./notifications";
+import { useV2Orgs } from "@/lib/use-v2-orgs";
 
 export function V2TopNav({
   notifOpen,
@@ -21,6 +22,7 @@ export function V2TopNav({
       <Link to="/v2" className="flex-none">
         <V2Logo />
       </Link>
+      <OrgSwitcher />
       <nav className="hidden items-center gap-5 text-[13.5px] lg:flex">
         {V2_NAV.map((item) => (
           <Link
@@ -92,6 +94,60 @@ export function V2BottomNav() {
         </Link>
       ))}
     </nav>
+  );
+}
+
+/** Org switcher — shows the current org and, when the user belongs to more than
+ *  one, a dropdown to switch. Hidden entirely for single-org users to stay discreet. */
+function OrgSwitcher() {
+  const { orgId, setOrgId, orgs } = useV2Orgs();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const current = orgs.find((o) => o.org.id === orgId)?.org;
+  if (!current) return null;
+  if (orgs.length < 2) {
+    return (
+      <span className="hidden truncate text-[12.5px] text-v2-ink-3 md:inline">{current.name}</span>
+    );
+  }
+
+  return (
+    <div className="relative hidden md:block" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-v2-ink-3 transition-colors hover:bg-v2-track hover:text-v2-ink"
+      >
+        <span className="max-w-[160px] truncate">{current.name}</span>
+        <span className="text-[10px] text-v2-faint">⌄</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 top-11 z-50 w-64 overflow-hidden rounded-xl border border-v2-line bg-v2-surface py-1 shadow-[0_16px_48px_rgba(33,31,28,0.16)]">
+          {orgs.map((o) => (
+            <button
+              key={o.org.id}
+              onClick={() => {
+                setOrgId(o.org.id);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between px-3.5 py-2 text-left text-[13px] hover:bg-v2-track ${
+                o.org.id === orgId ? "font-semibold text-v2-ink" : "text-v2-ink-2"
+              }`}
+            >
+              <span className="truncate">{o.org.name}</span>
+              {o.org.id === orgId && <span className="text-v2-green">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

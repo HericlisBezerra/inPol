@@ -4,10 +4,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { V2TopNav, V2BottomNav } from "./top-nav";
 import { V2CommandPalette } from "./command-palette";
+import { useV2Orgs } from "@/lib/use-v2-orgs";
 
 export function V2AppShell({ children }: { children: ReactNode }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const { orgId, setOrgId, orgs } = useV2Orgs();
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -19,6 +21,15 @@ export function V2AppShell({ children }: { children: ReactNode }) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
+
+  // Nunca deixar o app sem org válida: default para a primeira org do usuário
+  // quando não há org selecionada, ou a selecionada não pertence mais à lista.
+  useEffect(() => {
+    if (orgs.length === 0) return;
+    if (!orgId || !orgs.some((o) => o.org.id === orgId)) {
+      setOrgId(orgs[0].org.id);
+    }
+  }, [orgs, orgId, setOrgId]);
 
   return (
     <div className="v2-root min-h-screen">
