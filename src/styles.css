@@ -333,10 +333,24 @@
 }
 .v2-root a,
 .v2-site a {
-  color: var(--v2-green);
   text-decoration: none;
 }
-.v2-root a:hover,
-.v2-site a:hover {
+/* Cor-base de link com especificidade ZERO (:where) — assim qualquer utilitário
+   text-* do Tailwind vence (ex.: text-white nos botões verdes, text-v2-ink-2 no nav).
+   Antes, `.v2-site a` (0,1,1) sobrescrevia `.text-white` (0,1,0) → texto verde
+   sobre fundo verde = botão invisível. */
+:where(.v2-root, .v2-site) a {
+  color: var(--v2-green);
+}
+:where(.v2-root, .v2-site) a:hover {
   color: var(--v2-green-hover);
+}
+
+/* Âncoras do site (#produto, #camara…) não ficam sob o header fixo, com rolagem suave.
+   scroll-behavior tem que ir no elemento que rola (html); escopado ao site via :has. */
+:root:has(.v2-site) {
+  scroll-behavior: smooth;
+}
+.v2-site [id] {
+  scroll-margin-top: 88px;
 }

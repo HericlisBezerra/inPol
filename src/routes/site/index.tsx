@@ -5,6 +5,12 @@ export const Route = createFileRoute("/site/")({
   component: Screen,
 });
 
+// CTAs de contato — sem fluxo de agendamento ainda; e-mail é o destino reversível
+// (trocar por form/Calendly quando existir).
+const MAILTO_DEMO =
+  "mailto:contato@inpol.com.br?subject=Quero%20agendar%20uma%20demonstra%C3%A7%C3%A3o%20do%20inPol";
+const MAILTO_SALES = "mailto:contato@inpol.com.br?subject=Falar%20com%20vendas%20%E2%80%94%20inPol";
+
 /** W1 — Página de vendas. Foco: prefeituras · da manchete sofrida à manchete evitada. */
 function Screen() {
   return (
@@ -27,7 +33,7 @@ function Screen() {
         </p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
           <a
-            href="#"
+            href={MAILTO_DEMO}
             className="rounded-[10px] bg-v2-green px-[26px] py-[13px] text-[15px] font-[650] text-white transition-colors hover:bg-v2-green-hover"
           >
             Agendar demonstração
@@ -234,7 +240,7 @@ function Screen() {
           </div>
           <div className="mt-[26px] flex justify-center">
             <a
-              href="#"
+              href={MAILTO_DEMO}
               className="rounded-[10px] bg-v2-mint px-[26px] py-[13px] text-[15px] font-[650] text-v2-panel transition-opacity hover:opacity-90"
             >
               Agendar demonstração
@@ -257,11 +263,15 @@ function SiteHeader() {
     { label: "Planos", href: "#planos" },
   ];
   return (
-    <header className="flex items-center gap-[26px] border-b border-v2-line px-6 py-4 md:px-14">
+    <header className="sticky top-0 z-50 flex items-center gap-[26px] border-b border-v2-line bg-v2-bg/90 px-6 py-4 backdrop-blur md:px-14">
       <SiteLogo />
-      <nav className="hidden gap-[22px] text-[13.5px] text-v2-ink-2 lg:flex">
+      <nav className="hidden gap-[22px] text-[13.5px] lg:flex">
         {nav.map((n) => (
-          <a key={n.href} href={n.href} className="transition-colors hover:text-v2-ink">
+          <a
+            key={n.href}
+            href={n.href}
+            className="text-v2-ink-2 transition-colors hover:text-v2-ink"
+          >
             {n.label}
           </a>
         ))}
@@ -271,7 +281,7 @@ function SiteHeader() {
         Entrar
       </Link>
       <a
-        href="#"
+        href={MAILTO_DEMO}
         className="rounded-lg bg-v2-green px-[18px] py-[9px] text-[13.5px] font-[650] text-white transition-colors hover:bg-v2-green-hover"
       >
         Agendar demonstração
@@ -365,7 +375,7 @@ function PlanCard({
         ))}
       </ul>
       <a
-        href="#"
+        href={MAILTO_SALES}
         className="mt-[18px] block w-full rounded-lg border border-v2-line-strong py-2.5 text-center text-[13.5px] font-[650] text-v2-ink transition-colors hover:bg-v2-track"
       >
         {cta}
@@ -398,7 +408,7 @@ function PlanCardFeatured() {
         ))}
       </ul>
       <a
-        href="#"
+        href={MAILTO_DEMO}
         className="mt-[18px] block w-full rounded-lg bg-v2-mint py-2.5 text-center text-[13.5px] font-[650] text-v2-panel transition-opacity hover:opacity-90"
       >
         Agendar demonstração
