@@ -26,10 +26,11 @@ const TONE_HEX: Record<MapBairro["tone"], string> = {
   flat: "#a39d92",
 };
 
-/** Raio (em metros) do alcance de cada bairro — cresce com o volume de mensagens,
- *  com piso/teto para manter a leitura no zoom de cidade. */
+/** Raio (em metros) do alcance de cada bairro — cresce com o volume de mensagens
+ *  (escala por √msgs pra um bairro muito falado não engolir os vizinhos), com
+ *  piso/teto para manter a leitura no zoom de cidade. */
 function rangeMeters(msgs: number): number {
-  return Math.round(450 + Math.min(1150, msgs * 5));
+  return Math.round(400 + Math.min(850, Math.sqrt(msgs) * 70));
 }
 
 export function JundiaiMap({ bairros, caption }: { bairros: MapBairro[]; caption: string }) {

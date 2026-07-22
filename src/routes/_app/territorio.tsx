@@ -23,16 +23,28 @@ const APPROVAL_TONE: Record<Tone, string> = {
   crit: "text-v2-crit",
 };
 
-/** Coordenadas aproximadas dos bairros de Jundiaí que o mapa reconhece.
- *  Um bairro classificado pela IA que não estiver aqui vira "desconhecido" e
- *  precisa de vínculo manual — mesmo fluxo do design original. */
+/** Coordenadas dos bairros de Jundiaí que o mapa reconhece (chave = nome exato como
+ *  a IA classifica). As primeiras foram geocodificadas via OSM/Nominatim a partir dos
+ *  bairros que realmente aparecem nas mensagens; as demais são pontos conhecidos da
+ *  cidade. Um bairro classificado que não estiver aqui vira "desconhecido" e pode ser
+ *  vinculado manualmente. */
 const COORDS: Record<string, { lat: number; lng: number }> = {
+  // Bairros presentes nos dados reais (geocodificados)
+  Morada: { lat: -23.14188, lng: -46.92396 },
+  Ivoturucaia: { lat: -23.18276, lng: -46.80879 },
+  CECAP: { lat: -23.14108, lng: -46.92273 },
+  "Vila Arens": { lat: -23.19898, lng: -46.87742 },
+  "Ponte São João": { lat: -23.18447, lng: -46.87552 },
+  "Vila Rami": { lat: -23.2138, lng: -46.88004 },
+  Maringá: { lat: -23.227, lng: -46.88164 },
+  Vianelo: { lat: -23.20639, lng: -46.87712 },
+  "Jardim America": { lat: -23.18838, lng: -46.91346 },
+  // Outros bairros conhecidos de Jundiaí (dados futuros / outras orgs)
   Centro: { lat: -23.1866, lng: -46.895 },
   "Eloy Chaves": { lat: -23.158, lng: -46.928 },
   Medeiros: { lat: -23.229, lng: -46.908 },
   Anhangabaú: { lat: -23.202, lng: -46.915 },
   Retiro: { lat: -23.215, lng: -46.87 },
-  "Vila Rami": { lat: -23.172, lng: -46.883 },
 };
 
 function toneForApproval(approval: number): Tone {
