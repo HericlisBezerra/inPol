@@ -72,6 +72,7 @@ function Screen() {
     const base: MapBairro[] = known.map((b) => ({
       name: b.name,
       approval: b.approval,
+      sentiment: b.sentiment,
       msgs: b.msgs,
       tone: toneForApproval(b.approval),
       lat: COORDS[b.name].lat,
@@ -85,6 +86,7 @@ function Screen() {
       base.push({
         name: u.name,
         approval: u.approval,
+        sentiment: u.sentiment,
         msgs: u.msgs,
         tone: toneForApproval(u.approval),
         lat: k.lat,

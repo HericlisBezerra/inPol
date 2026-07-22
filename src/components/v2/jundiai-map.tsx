@@ -1,12 +1,15 @@
-/** Real map of Jundiaí (OpenStreetMap tiles via Leaflet), colored by approval per bairro.
+/** Real map of Jundiaí (OpenStreetMap tiles via Leaflet), colored by sentiment/approval per bairro.
  *  SSR-safe: Leaflet is dynamically imported inside useEffect, so it never runs on the server.
- *  Bairros without coordinates are handled by the caller (unknown-to-Maps flow in Território). */
+ *  Each bairro is drawn as a range circle (raio em metros — escala com o zoom) preenchido pelo tom
+ *  de sentimento, com rótulo permanente do índice (aprovação %). Bairros without coordinates are
+ *  handled by the caller (unknown-to-Maps flow in Território). */
 import { useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap } from "leaflet";
 
 export type MapBairro = {
   name: string;
   approval: number;
+  sentiment: number; // média -1..1
   msgs: number;
   tone: "green" | "warn" | "crit" | "flat";
   lat: number;
@@ -22,6 +25,12 @@ const TONE_HEX: Record<MapBairro["tone"], string> = {
   crit: "#c43d2b",
   flat: "#a39d92",
 };
+
+/** Raio (em metros) do alcance de cada bairro — cresce com o volume de mensagens,
+ *  com piso/teto para manter a leitura no zoom de cidade. */
+function rangeMeters(msgs: number): number {
+  return Math.round(450 + Math.min(1150, msgs * 5));
+}
 
 export function JundiaiMap({ bairros, caption }: { bairros: MapBairro[]; caption: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -40,28 +49,52 @@ export function JundiaiMap({ bairros, caption }: { bairros: MapBairro[]; caption
         maxZoom: 18,
       }).addTo(map);
 
-      const pts: [number, number][] = [];
       for (const b of bairros) {
-        L.circleMarker([b.lat, b.lng], {
-          radius: 9 + Math.min(9, Math.round(b.msgs / 55)),
-          color: "#ffffff",
+        const color = TONE_HEX[b.tone];
+        const sentStr = `${b.sentiment >= 0 ? "+" : ""}${b.sentiment.toFixed(2)}`;
+        const popup = `<b>${b.name}</b><br>${b.approval}% aprovação · sentimento ${sentStr} · ${b.msgs} msgs${
+          b.linked ? "<br><i>vinculado manualmente</i>" : ""
+        }`;
+
+        // Área/alcance do bairro (raio em metros → escala com o zoom).
+        L.circle([b.lat, b.lng], {
+          radius: rangeMeters(b.msgs),
+          color,
           weight: 2,
-          fillColor: TONE_HEX[b.tone],
-          fillOpacity: 0.85,
-          dashArray: b.linked ? "3 3" : undefined,
+          opacity: 0.9,
+          fillColor: color,
+          fillOpacity: 0.28,
+          dashArray: b.linked ? "5 5" : undefined,
         })
           .addTo(map)
-          .bindTooltip(`${b.name} · ${b.approval}%`, { direction: "top", offset: [0, -4] })
-          .bindPopup(
-            `<b>${b.name}</b><br>${b.approval}% aprovação · ${b.msgs} msgs${
-              b.linked ? "<br><i>vinculado manualmente</i>" : ""
-            }`,
-          );
-        pts.push([b.lat, b.lng]);
+          .bindPopup(popup)
+          // Rótulo permanente com o índice de sentimento (aprovação %) sobre o bairro.
+          .bindTooltip(`<span class="pct">${b.approval}%</span><span class="nm">${b.name}</span>`, {
+            permanent: true,
+            direction: "center",
+            className: "bairro-label",
+            opacity: 1,
+          });
+
+        // Ponto central (marca o local exato do bairro).
+        L.circleMarker([b.lat, b.lng], {
+          radius: 3,
+          color: "#ffffff",
+          weight: 1.5,
+          fillColor: color,
+          fillOpacity: 1,
+        })
+          .addTo(map)
+          .bindPopup(popup);
       }
-      if (pts.length > 1) map.fitBounds(pts, { padding: [42, 42] });
-      else if (pts.length === 1) map.setView(pts[0], 13);
-      else map.setView([-23.1857, -46.8978], 12); // Jundiaí centro
+      if (bairros.length > 0) {
+        const group = L.featureGroup(
+          bairros.map((b) => L.circle([b.lat, b.lng], { radius: rangeMeters(b.msgs) })),
+        );
+        map.fitBounds(group.getBounds(), { padding: [30, 30] });
+      } else {
+        map.setView([-23.1857, -46.8978], 12); // Jundiaí centro
+      }
       setReady(true);
     })();
 

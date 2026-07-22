@@ -357,3 +357,32 @@
 .v2-site [id] {
   scroll-margin-top: 88px;
 }
+
+/* Rótulo permanente de bairro no mapa de Território (índice de sentimento sobre a área). */
+.leaflet-tooltip.bairro-label {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: #fff;
+  text-align: center;
+  font-weight: 700;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.85),
+    0 0 2px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+}
+.leaflet-tooltip.bairro-label::before {
+  display: none;
+}
+.leaflet-tooltip.bairro-label .pct {
+  display: block;
+  font-size: 14px;
+  line-height: 1.05;
+}
+.leaflet-tooltip.bairro-label .nm {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.95;
+}
