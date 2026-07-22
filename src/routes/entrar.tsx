@@ -1,6 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/entrar")({
+  ssr: false,
   head: () => ({
     meta: [{ title: "Entrar — Inpol" }],
     links: [
@@ -13,8 +17,61 @@ export const Route = createFileRoute("/entrar")({
   component: Screen,
 });
 
-/** S21 — Login (standalone, visual/inerte): painel institucional + formulário e-mail/senha e link mágico. */
+/** S21 — Login: painel institucional + formulário e-mail/senha e link mágico ligados ao Supabase Auth. */
 function Screen() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  const [isMagicPending, setIsMagicPending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) navigate({ to: "/v2" });
+    });
+  }, [navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setIsPending(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      navigate({ to: "/v2" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha no login.";
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  const handleMagicLink = async () => {
+    setErrorMessage(null);
+    if (!email) {
+      setErrorMessage("Informe o e-mail para receber o link mágico.");
+      return;
+    }
+    setIsMagicPending(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/v2` },
+      });
+      if (error) throw error;
+      toast.success("Link mágico enviado. Confira seu e-mail.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha ao enviar o link mágico.";
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
+      setIsMagicPending(false);
+    }
+  };
+
   return (
     <div className="v2-root flex min-h-screen flex-col text-v2-ink lg:flex-row">
       {/* Painel esquerdo — verde escuro institucional */}
@@ -47,49 +104,62 @@ function Screen() {
             Use o e-mail institucional cadastrado pela sua organização.
           </p>
 
-          <div className="mt-6">
-            <label
-              htmlFor="login-email"
-              className="mb-1.5 block text-[12.5px] font-[650] text-v2-ink"
-            >
-              E-mail
-            </label>
-            <input
-              id="login-email"
-              type="email"
-              defaultValue="marina@jundiai.sp.gov.br"
-              className="w-full rounded-[10px] border-[1.5px] border-v2-green bg-v2-card px-3.5 py-[11px] text-[14px] text-v2-ink shadow-[0_0_0_3px_rgba(14,123,91,0.12)] outline-none"
-            />
-          </div>
-
-          <div className="mt-3.5">
-            <div className="mb-1.5 flex items-center justify-between">
-              <label htmlFor="login-senha" className="text-[12.5px] font-[650] text-v2-ink">
-                Senha
+          <form onSubmit={handleSubmit}>
+            <div className="mt-6">
+              <label
+                htmlFor="login-email"
+                className="mb-1.5 block text-[12.5px] font-[650] text-v2-ink"
+              >
+                E-mail
               </label>
-              <button type="button" className="text-[12px] font-[650] text-v2-green">
-                Esqueci a senha
-              </button>
-            </div>
-            <div className="flex items-center justify-between rounded-[10px] border border-v2-line-strong bg-v2-card px-3.5 py-[11px]">
               <input
-                id="login-senha"
-                type="password"
-                defaultValue="••••••••••"
-                className="w-full bg-transparent text-[14px] text-v2-faint outline-none"
+                id="login-email"
+                type="email"
+                placeholder="voce@suaprefeitura.sp.gov.br"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full rounded-[10px] border-[1.5px] border-v2-green bg-v2-card px-3.5 py-[11px] text-[14px] text-v2-ink shadow-[0_0_0_3px_rgba(14,123,91,0.12)] outline-none"
               />
-              <span className="ml-2 select-none text-[14px]" aria-hidden>
-                👁
-              </span>
             </div>
-          </div>
 
-          <Link
-            to="/v2"
-            className="mt-5 block rounded-[10px] bg-v2-ink py-3 text-center text-[14.5px] font-[650] text-white"
-          >
-            Entrar
-          </Link>
+            <div className="mt-3.5">
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="login-senha" className="text-[12.5px] font-[650] text-v2-ink">
+                  Senha
+                </label>
+                <button type="button" className="text-[12px] font-[650] text-v2-green">
+                  Esqueci a senha
+                </button>
+              </div>
+              <div className="flex items-center justify-between rounded-[10px] border border-v2-line-strong bg-v2-card px-3.5 py-[11px]">
+                <input
+                  id="login-senha"
+                  type="password"
+                  placeholder="••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full bg-transparent text-[14px] text-v2-ink outline-none"
+                />
+                <span className="ml-2 select-none text-[14px]" aria-hidden>
+                  👁
+                </span>
+              </div>
+            </div>
+
+            {errorMessage && (
+              <p className="mt-3 text-[12.5px] leading-[1.5] text-v2-crit">{errorMessage}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isPending}
+              className="mt-5 block w-full rounded-[10px] bg-v2-ink py-3 text-center text-[14.5px] font-[650] text-white disabled:opacity-60"
+            >
+              {isPending ? "Entrando…" : "Entrar"}
+            </button>
+          </form>
 
           <div className="my-4 flex items-center gap-3">
             <div className="h-px flex-1 bg-v2-line" />
@@ -99,9 +169,11 @@ function Screen() {
 
           <button
             type="button"
-            className="w-full rounded-[10px] border border-v2-line-strong bg-v2-card py-3 text-center text-[14px] font-[650] text-v2-ink"
+            onClick={handleMagicLink}
+            disabled={isMagicPending}
+            className="w-full rounded-[10px] border border-v2-line-strong bg-v2-card py-3 text-center text-[14px] font-[650] text-v2-ink disabled:opacity-60"
           >
-            ✉ Receber link mágico por e-mail
+            {isMagicPending ? "Enviando…" : "✉ Receber link mágico por e-mail"}
           </button>
 
           <p className="mt-5 text-center text-[11.5px] leading-[1.6] text-v2-faint">

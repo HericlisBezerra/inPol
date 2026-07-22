@@ -19,7 +19,6 @@ import { Check, ChevronsUpDown, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentOrg } from "@/lib/use-current-org";
-import { AuthDebug } from "@/components/auth-debug";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -228,7 +227,6 @@ function Onboarding() {
           {mut.isPending ? "Criando..." : "Criar organização"}
         </Button>
       </Card>
-      <AuthDebug />
     </div>
   );
 }

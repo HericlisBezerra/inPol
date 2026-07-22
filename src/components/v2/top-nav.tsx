@@ -22,7 +22,6 @@ export function V2TopNav({
       <Link to="/v2" className="flex-none">
         <V2Logo />
       </Link>
-      <OrgSwitcher />
       <nav className="hidden items-center gap-5 text-[13.5px] lg:flex">
         {V2_NAV.map((item) => (
           <Link
@@ -37,6 +36,7 @@ export function V2TopNav({
         ))}
       </nav>
       <div className="flex-1" />
+      <OrgSwitcher />
       <button
         onClick={onOpenPalette}
         className="hidden w-[200px] items-center gap-2 rounded-lg bg-v2-track px-3 py-2 text-[12.5px] text-v2-ink-3 hover:bg-v2-line md:flex"

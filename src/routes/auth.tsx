@@ -22,7 +22,7 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/dashboard" });
+      if (data.user) navigate({ to: "/v2" });
     });
   }, [navigate]);
 
@@ -32,7 +32,7 @@ function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      navigate({ to: "/dashboard" });
+      navigate({ to: "/v2" });
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Falha no login. Acesso é apenas por convite.",

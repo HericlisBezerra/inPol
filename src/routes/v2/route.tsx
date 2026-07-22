@@ -1,8 +1,17 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
 import { V2AppShell } from "@/components/v2/shell";
 import { V2ErrorComponent, V2NotFound } from "@/components/v2/error-boundary";
 
 export const Route = createFileRoute("/v2")({
+  // Client-only + guarda de auth (mesmo padrão do app antigo `_authenticated`): sessão vive no
+  // client, então checar no server derrubaria usuário logado. Deslogado → tela de login v2.
+  ssr: false,
+  beforeLoad: async () => {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) throw redirect({ to: "/entrar" });
+    return { user: data.user };
+  },
   head: () => ({
     meta: [{ title: "Inpol v2 — Sistema" }],
     links: [
