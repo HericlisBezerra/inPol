@@ -37,6 +37,7 @@ import { Route as AppRelatoriosReportIdRouteImport } from './routes/_app/relator
 import { Route as AppCamaraVereadorIdRouteImport } from './routes/_app/camara.$vereadorId'
 import { Route as AppAlertasAlertIdRouteImport } from './routes/_app/alertas.$alertId'
 import { Route as AppAjustesWhatsappRouteImport } from './routes/_app/ajustes/whatsapp'
+import { Route as AppAjustesPerfilRouteImport } from './routes/_app/ajustes/perfil'
 import { Route as AppAjustesOrganizacoesRouteImport } from './routes/_app/ajustes/organizacoes'
 import { Route as AppAjustesNotificacoesRouteImport } from './routes/_app/ajustes/notificacoes'
 import { Route as AppAjustesFontesRouteImport } from './routes/_app/ajustes/fontes'
@@ -191,6 +192,11 @@ const AppAjustesWhatsappRoute = AppAjustesWhatsappRouteImport.update({
   path: '/whatsapp',
   getParentRoute: () => AppAjustesRouteRoute,
 } as any)
+const AppAjustesPerfilRoute = AppAjustesPerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => AppAjustesRouteRoute,
+} as any)
 const AppAjustesOrganizacoesRoute = AppAjustesOrganizacoesRouteImport.update({
   id: '/organizacoes',
   path: '/organizacoes',
@@ -295,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/ajustes/fontes': typeof AppAjustesFontesRoute
   '/ajustes/notificacoes': typeof AppAjustesNotificacoesRoute
   '/ajustes/organizacoes': typeof AppAjustesOrganizacoesRoute
+  '/ajustes/perfil': typeof AppAjustesPerfilRoute
   '/ajustes/whatsapp': typeof AppAjustesWhatsappRoute
   '/alertas/$alertId': typeof AppAlertasAlertIdRoute
   '/camara/$vereadorId': typeof AppCamaraVereadorIdRoute
@@ -333,6 +340,7 @@ export interface FileRoutesByTo {
   '/ajustes/fontes': typeof AppAjustesFontesRoute
   '/ajustes/notificacoes': typeof AppAjustesNotificacoesRoute
   '/ajustes/organizacoes': typeof AppAjustesOrganizacoesRoute
+  '/ajustes/perfil': typeof AppAjustesPerfilRoute
   '/ajustes/whatsapp': typeof AppAjustesWhatsappRoute
   '/alertas/$alertId': typeof AppAlertasAlertIdRoute
   '/camara/$vereadorId': typeof AppCamaraVereadorIdRoute
@@ -378,6 +386,7 @@ export interface FileRoutesById {
   '/_app/ajustes/fontes': typeof AppAjustesFontesRoute
   '/_app/ajustes/notificacoes': typeof AppAjustesNotificacoesRoute
   '/_app/ajustes/organizacoes': typeof AppAjustesOrganizacoesRoute
+  '/_app/ajustes/perfil': typeof AppAjustesPerfilRoute
   '/_app/ajustes/whatsapp': typeof AppAjustesWhatsappRoute
   '/_app/alertas/$alertId': typeof AppAlertasAlertIdRoute
   '/_app/camara/$vereadorId': typeof AppCamaraVereadorIdRoute
@@ -423,6 +432,7 @@ export interface FileRouteTypes {
     | '/ajustes/fontes'
     | '/ajustes/notificacoes'
     | '/ajustes/organizacoes'
+    | '/ajustes/perfil'
     | '/ajustes/whatsapp'
     | '/alertas/$alertId'
     | '/camara/$vereadorId'
@@ -461,6 +471,7 @@ export interface FileRouteTypes {
     | '/ajustes/fontes'
     | '/ajustes/notificacoes'
     | '/ajustes/organizacoes'
+    | '/ajustes/perfil'
     | '/ajustes/whatsapp'
     | '/alertas/$alertId'
     | '/camara/$vereadorId'
@@ -505,6 +516,7 @@ export interface FileRouteTypes {
     | '/_app/ajustes/fontes'
     | '/_app/ajustes/notificacoes'
     | '/_app/ajustes/organizacoes'
+    | '/_app/ajustes/perfil'
     | '/_app/ajustes/whatsapp'
     | '/_app/alertas/$alertId'
     | '/_app/camara/$vereadorId'
@@ -740,6 +752,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAjustesWhatsappRouteImport
       parentRoute: typeof AppAjustesRouteRoute
     }
+    '/_app/ajustes/perfil': {
+      id: '/_app/ajustes/perfil'
+      path: '/perfil'
+      fullPath: '/ajustes/perfil'
+      preLoaderRoute: typeof AppAjustesPerfilRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
     '/_app/ajustes/organizacoes': {
       id: '/_app/ajustes/organizacoes'
       path: '/organizacoes'
@@ -848,6 +867,7 @@ interface AppAjustesRouteRouteChildren {
   AppAjustesFontesRoute: typeof AppAjustesFontesRoute
   AppAjustesNotificacoesRoute: typeof AppAjustesNotificacoesRoute
   AppAjustesOrganizacoesRoute: typeof AppAjustesOrganizacoesRoute
+  AppAjustesPerfilRoute: typeof AppAjustesPerfilRoute
   AppAjustesWhatsappRoute: typeof AppAjustesWhatsappRoute
   AppAjustesIndexRoute: typeof AppAjustesIndexRoute
 }
@@ -859,6 +879,7 @@ const AppAjustesRouteRouteChildren: AppAjustesRouteRouteChildren = {
   AppAjustesFontesRoute: AppAjustesFontesRoute,
   AppAjustesNotificacoesRoute: AppAjustesNotificacoesRoute,
   AppAjustesOrganizacoesRoute: AppAjustesOrganizacoesRoute,
+  AppAjustesPerfilRoute: AppAjustesPerfilRoute,
   AppAjustesWhatsappRoute: AppAjustesWhatsappRoute,
   AppAjustesIndexRoute: AppAjustesIndexRoute,
 }

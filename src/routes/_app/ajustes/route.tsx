@@ -13,6 +13,7 @@ export const Route = createFileRoute("/_app/ajustes")({
  */
 // Ordem e nomes canônicos do design (s12/s17–s27).
 const NAV_ITEMS: { to: string; label: string; exact?: boolean }[] = [
+  { to: "/ajustes/perfil", label: "Meu perfil" },
   { to: "/ajustes", label: "Vocabulário", exact: true },
   { to: "/ajustes/whatsapp", label: "WhatsApp" },
   { to: "/ajustes/fontes", label: "Fontes locais" },

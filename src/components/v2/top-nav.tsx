@@ -1,10 +1,29 @@
 /** Shared v2 top navigation bar (see S1–S28 chrome). */
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { V2Logo } from "./logo";
 import { V2_NAV } from "./nav-items";
 import { V2Notifications } from "./notifications";
 import { useV2Orgs } from "@/lib/use-v2-orgs";
+import { getMyProfile } from "@/lib/profile.functions";
+
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Admin",
+  analyst: "Analista",
+  viewer: "Leitor",
+};
+
+function initialsFrom(nameOrEmail: string) {
+  return (
+    nameOrEmail
+      .split(/[\s@.]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase())
+      .join("") || "?"
+  );
+}
 
 export function V2TopNav({
   notifOpen,
@@ -156,6 +175,8 @@ function OrgSwitcher() {
 function AvatarMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const { orgId, orgs } = useV2Orgs();
+  const { data: profile } = useQuery({ queryKey: ["my-profile"], queryFn: () => getMyProfile() });
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -164,27 +185,43 @@ function AvatarMenu() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
   const items = [
+    { to: "/ajustes/perfil", label: "Meu perfil" },
     { to: "/ajustes", label: "Ajustes" },
     { to: "/eleicao", label: "Modo Eleição" },
     { to: "/admin", label: "Admin da plataforma" },
   ] as const;
+
+  const displayName = profile?.full_name || profile?.email || "Minha conta";
+  const roleRaw = orgs.find((o) => o.org.id === orgId)?.role;
+  const roleLabel = roleRaw ? (ROLE_LABEL[roleRaw] ?? roleRaw) : null;
+  const initials = initialsFrom(profile?.full_name || profile?.email || "?");
+
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="grid h-8 w-8 place-items-center rounded-full bg-v2-green text-[12px] font-semibold text-white"
+        className="grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-v2-green text-[12px] font-semibold text-white"
         aria-label="Menu da conta"
       >
-        MC
+        {profile?.avatar_url ? (
+          <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" />
+        ) : (
+          initials
+        )}
       </button>
       {open && (
         <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-xl border border-v2-line bg-v2-surface py-1 shadow-[0_16px_48px_rgba(33,31,28,0.16)]">
-          <div className="border-b border-v2-line px-3.5 py-2.5">
-            <div className="text-[13px] font-semibold text-v2-ink">Marina Costa</div>
-            <div className="font-mono text-[11px] text-v2-faint">
-              marina@jundiai.sp.gov.br · Dona
+          <Link
+            to="/ajustes/perfil"
+            onClick={() => setOpen(false)}
+            className="block border-b border-v2-line px-3.5 py-2.5 hover:bg-v2-track"
+          >
+            <div className="truncate text-[13px] font-semibold text-v2-ink">{displayName}</div>
+            <div className="truncate font-mono text-[11px] text-v2-faint">
+              {profile?.email ?? ""}
+              {roleLabel ? ` · ${roleLabel}` : ""}
             </div>
-          </div>
+          </Link>
           {items.map((it) => (
             <Link
               key={it.to}
