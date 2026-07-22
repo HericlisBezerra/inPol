@@ -28,7 +28,7 @@ function Screen() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/v2" });
+      if (data.user) navigate({ to: "/painel" });
     });
   }, [navigate]);
 
@@ -39,7 +39,7 @@ function Screen() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      navigate({ to: "/v2" });
+      navigate({ to: "/painel" });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Falha no login.";
       setErrorMessage(message);
@@ -59,7 +59,7 @@ function Screen() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${window.location.origin}/v2` },
+        options: { emailRedirectTo: `${window.location.origin}/painel` },
       });
       if (error) throw error;
       toast.success("Link mágico enviado. Confira seu e-mail.");

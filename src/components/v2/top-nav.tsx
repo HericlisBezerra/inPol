@@ -19,7 +19,7 @@ export function V2TopNav({
 }) {
   return (
     <div className="sticky top-0 z-40 flex items-center gap-6 border-b border-v2-line bg-v2-surface/90 px-6 py-3.5 backdrop-blur md:px-10">
-      <Link to="/v2" className="flex-none">
+      <Link to="/painel" className="flex-none">
         <V2Logo />
       </Link>
       <nav className="hidden items-center gap-5 text-[13.5px] lg:flex">
@@ -27,7 +27,7 @@ export function V2TopNav({
           <Link
             key={item.to}
             to={item.to}
-            activeOptions={{ exact: item.to === "/v2" }}
+            activeOptions={{ exact: item.to === "/painel" }}
             className="text-v2-ink-3 transition-colors hover:text-v2-ink"
             activeProps={{ className: "font-semibold text-v2-ink" }}
           >
@@ -69,10 +69,10 @@ export function V2TopNav({
 
 /** Mobile bottom tab bar (s13) — primary nav below `lg`, where the top nav links are hidden. */
 const BOTTOM_NAV = [
-  { to: "/v2", label: "Painel", icon: "◈", exact: true },
-  { to: "/v2/alertas", label: "Alertas", icon: "▲", exact: false },
-  { to: "/v2/territorio", label: "Território", icon: "▦", exact: false },
-  { to: "/v2/sinais", label: "Sinais", icon: "◎", exact: false },
+  { to: "/painel", label: "Painel", icon: "◈", exact: true },
+  { to: "/alertas", label: "Alertas", icon: "▲", exact: false },
+  { to: "/territorio", label: "Território", icon: "▦", exact: false },
+  { to: "/sinais", label: "Sinais", icon: "◎", exact: false },
 ] as const;
 
 export function V2BottomNav() {
@@ -164,9 +164,9 @@ function AvatarMenu() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
   const items = [
-    { to: "/v2/ajustes", label: "Ajustes" },
-    { to: "/v2-eleicao", label: "Modo Eleição" },
-    { to: "/v2-admin", label: "Admin da plataforma" },
+    { to: "/ajustes", label: "Ajustes" },
+    { to: "/eleicao", label: "Modo Eleição" },
+    { to: "/admin", label: "Admin da plataforma" },
   ] as const;
   return (
     <div className="relative" ref={ref}>

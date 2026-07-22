@@ -39,7 +39,7 @@ function Screen() {
             Agendar demonstração
           </a>
           <Link
-            to="/v2"
+            to="/painel"
             className="rounded-[10px] border border-v2-line-strong bg-v2-card px-[26px] py-[13px] text-[15px] font-[650] text-v2-ink transition-colors hover:bg-v2-track"
           >
             Ver o painel de exemplo

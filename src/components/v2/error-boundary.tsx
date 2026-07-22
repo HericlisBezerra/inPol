@@ -46,7 +46,7 @@ export function V2ErrorComponent({ error, reset }: { error: Error; reset: () => 
           Tentar de novo
         </button>
         <Link
-          to="/v2"
+          to="/painel"
           className="rounded-lg border border-v2-line-strong bg-v2-card px-4 py-2.5 text-[14px] font-semibold text-v2-ink"
         >
           Ir para o painel
@@ -63,7 +63,7 @@ export function V2NotFound() {
       <h1 className="mt-3 text-[20px] font-semibold text-v2-ink">Página não encontrada</h1>
       <p className="mt-2 text-[14px] text-v2-ink-2">O endereço não existe ou foi movido.</p>
       <Link
-        to="/v2"
+        to="/painel"
         className="mt-6 rounded-lg bg-v2-green px-4 py-2.5 text-[14px] font-semibold text-white"
       >
         Voltar ao painel
