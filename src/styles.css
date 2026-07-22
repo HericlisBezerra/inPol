@@ -331,19 +331,22 @@
   font-size: 11px;
   letter-spacing: 0.1em;
 }
-.v2-root a,
-.v2-site a {
-  text-decoration: none;
-}
-/* Cor-base de link com especificidade ZERO (:where) — assim qualquer utilitário
-   text-* do Tailwind vence (ex.: text-white nos botões verdes, text-v2-ink-2 no nav).
-   Antes, `.v2-site a` (0,1,1) sobrescrevia `.text-white` (0,1,0) → texto verde
-   sobre fundo verde = botão invisível. */
-:where(.v2-root, .v2-site) a {
-  color: var(--v2-green);
-}
-:where(.v2-root, .v2-site) a:hover {
-  color: var(--v2-green-hover);
+/* Cor-base de link DENTRO de @layer base — o motivo real do bug não era
+   especificidade, e sim cascade layers: os utilitários do Tailwind v4 vivem em
+   @layer utilities, e regra SEM layer vence QUALQUER regra com layer. A `.v2-site a`
+   antiga era unlayered → sobrescrevia `.text-white` (layered) → texto verde sobre
+   fundo verde = botão invisível. Em @layer base, utilities (camada acima) vencem:
+   text-white nos CTAs, text-v2-ink-2 no nav, etc. */
+@layer base {
+  .v2-root a,
+  .v2-site a {
+    color: var(--v2-green);
+    text-decoration: none;
+  }
+  .v2-root a:hover,
+  .v2-site a:hover {
+    color: var(--v2-green-hover);
+  }
 }
 
 /* Âncoras do site (#produto, #camara…) não ficam sob o header fixo, com rolagem suave.
