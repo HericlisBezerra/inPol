@@ -5,4 +5,13 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
   "observability": { "enabled": true },
+  // Config não-secreta (URL + publishable/anon key + ref — já públicas no bundle do client).
+  // Ficam AQUI (versionado) porque `wrangler deploy` apaga vars de texto não declaradas.
+  // Os SECRETS (SERVICE_ROLE_KEY, GEMINI/DEEPSEEK/FIRECRAWL/APIFY) continuam no secret store
+  // do Worker (persistem entre deploys), nunca aqui.
+  "vars": {
+    "SUPABASE_URL": "https://llsrargudlutbwfgunrr.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_4d3mxu0zL4GUxVkXtXuPug_TSumMyb-",
+    "SUPABASE_PROJECT_ID": "llsrargudlutbwfgunrr"
+  }
 }
