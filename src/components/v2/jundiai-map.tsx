@@ -88,14 +88,12 @@ export function JundiaiMap({ bairros, caption }: { bairros: MapBairro[]; caption
           .addTo(map)
           .bindPopup(popup);
       }
-      if (bairros.length > 0) {
-        const group = L.featureGroup(
-          bairros.map((b) => L.circle([b.lat, b.lng], { radius: rangeMeters(b.msgs) })),
-        );
-        map.fitBounds(group.getBounds(), { padding: [30, 30] });
-      } else {
-        map.setView([-23.1857, -46.8978], 12); // Jundiaí centro
-      }
+      // fitBounds pelos centros dos bairros (com padding). Não usar getBounds() de
+      // círculos aqui: L.circle.getBounds() exige o layer já estar num mapa.
+      const pts = bairros.map((b) => [b.lat, b.lng] as [number, number]);
+      if (pts.length > 1) map.fitBounds(pts, { padding: [45, 45] });
+      else if (pts.length === 1) map.setView(pts[0], 14);
+      else map.setView([-23.1857, -46.8978], 12); // Jundiaí centro
       setReady(true);
     })();
 
