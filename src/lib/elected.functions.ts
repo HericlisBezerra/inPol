@@ -112,7 +112,15 @@ export const importElected = createServerFn({ method: "POST" })
         partido_nome: c.partido?.nome ?? null,
         situacao_turno: tot || c.descricaoSituacao || null,
         is_elected: isElected,
-        foto_url: c.fotoUrl ?? null,
+        // O endpoint de LISTAGEM não devolve `fotoUrl` — só o de detalhe. Buscar o
+        // detalhe de cada candidato seria uma requisição por pessoa (283 na Jundiaí).
+        // A URL da foto é determinística, então montamos: verificado contra o TSE
+        // (HTTP 200, image/jpeg). `c.fotoUrl` continua tendo precedência se um dia vier.
+        foto_url:
+          c.fotoUrl ??
+          (c.id != null
+            ? `https://divulgacandcontas.tse.jus.br/divulga/rest/arquivo/img/${eleicaoId}/${String(c.id)}/${data.codMunicipioTse}`
+            : null),
         tse_candidate_id: c.id != null ? String(c.id) : null,
       };
     });
