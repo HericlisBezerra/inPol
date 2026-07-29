@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { fetchAllPages } from "@/lib/pg-paginate";
 import { z } from "zod";
 
 /**
@@ -21,16 +22,23 @@ export const getTerritoryStats = createServerFn({ method: "POST" })
     });
     if (!ok) throw new Error("Sem acesso.");
     const since = new Date(Date.now() - data.days * 86400_000).toISOString();
-    const { data: rows, error } = await context.supabase
-      .from("message_analyses")
-      .select("neighborhood, sentiment")
-      .eq("org_id", data.orgId)
-      .gte("created_at", since)
-      .not("neighborhood", "is", null)
-      .limit(20000);
-    if (error) throw new Error(error.message);
+    // Agregação por bairro: precisa do período INTEIRO, senão a contagem de mensagens e o
+    // sentimento médio de cada bairro saem subestimados. O `.limit(20000)` que estava aqui era
+    // uma mentira — o PostgREST corta em 1.000 linhas sem erro nenhum (a org piloto passa de
+    // 4.000/semana, então o teto era atingido de verdade e o mapa mostrava ~20% do real).
+    const rows = await fetchAllPages<{ neighborhood: string | null; sentiment: number | null }>(
+      (from, to) =>
+        context.supabase
+          .from("message_analyses")
+          .select("neighborhood, sentiment")
+          .eq("org_id", data.orgId)
+          .gte("created_at", since)
+          .not("neighborhood", "is", null)
+          .order("id", { ascending: true }) // ordem estável: sem isso a paginação repete/pula linhas
+          .range(from, to),
+    );
     const agg = new Map<string, { msgs: number; sent: number }>();
-    for (const r of rows ?? []) {
+    for (const r of rows) {
       const key = (r.neighborhood ?? "").trim();
       if (!key) continue;
       const a = agg.get(key) ?? { msgs: 0, sent: 0 };

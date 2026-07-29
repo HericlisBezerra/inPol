@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrg } from "@/lib/use-current-org";
+import { countExact, fetchAllPages } from "@/lib/pg-paginate";
 import {
   getLgpdPolicy,
   runPurgeNow,
@@ -99,9 +100,26 @@ function Screen() {
         .select("id, action, actor_id, created_at, target_kind, target_id, metadata")
         .eq("org_id", orgId!)
         .order("created_at", { ascending: false })
-        .limit(200);
+        .limit(200); // limite de EXIBIÇÃO — os últimos 200 eventos. Contagem e CSV não saem daqui.
       if (error) throw new Error(error.message);
       return (data ?? []) as AuditRow[];
+    },
+  });
+
+  // Contado no banco, não em cima de `trail`: a lista é cortada em 200 para exibir, então
+  // derivar o total dela travaria o card em "200" e esconderia o volume real de eventos.
+  const { data: accessCount30d } = useQuery({
+    queryKey: ["audit-log-count-30d", orgId],
+    enabled: !!orgId,
+    queryFn: () => {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      return countExact(
+        supabase
+          .from("audit_log")
+          .select("*", { count: "exact", head: true })
+          .eq("org_id", orgId!)
+          .gte("created_at", cutoff),
+      );
     },
   });
 
@@ -132,30 +150,42 @@ function Screen() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao excluir"),
   });
 
-  const exportCsv = () => {
-    const header = ["created_at", "actor_id", "action", "target_kind", "target_id"];
-    const rows = trail.map((e) => [
-      e.created_at,
-      e.actor_id ?? "",
-      e.action,
-      e.target_kind ?? "",
-      e.target_id ?? "",
-    ]);
-    const csv = [header, ...rows]
-      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
-
-  const accessCount30d = trail.filter((e) => {
-    const d = new Date(e.created_at);
-    return Date.now() - d.getTime() <= 30 * 24 * 60 * 60 * 1000;
-  }).length;
+  // O CSV é a peça que vai para a ANPD: ele busca a trilha INTEIRA no banco, não os 200 da tela.
+  // Exportar o que estava em memória entregava um relatório de conformidade incompleto sem que
+  // ninguém percebesse — o arquivo baixa igual, só que faltando eventos.
+  const exportCsvMut = useMutation({
+    mutationFn: async () => {
+      const all = await fetchAllPages<AuditRow>((from, to) =>
+        supabase
+          .from("audit_log")
+          .select("id, action, actor_id, created_at, target_kind, target_id, metadata")
+          .eq("org_id", orgId!)
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true }) // desempate: created_at repete em eventos do mesmo lote
+          .range(from, to),
+      );
+      const header = ["created_at", "actor_id", "action", "target_kind", "target_id"];
+      const rows = all.map((e) => [
+        e.created_at,
+        e.actor_id ?? "",
+        e.action,
+        e.target_kind ?? "",
+        e.target_id ?? "",
+      ]);
+      const csv = [header, ...rows]
+        .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      return all.length;
+    },
+    onSuccess: (n) => toast.success(`${n.toLocaleString("pt-BR")} eventos exportados`),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro ao exportar a trilha"),
+  });
 
   if (!orgId) {
     return <div className="p-6 text-[13px] text-v2-ink-3">Selecione uma organização.</div>;
@@ -172,11 +202,11 @@ function Screen() {
           </div>
         </div>
         <button
-          onClick={exportCsv}
-          disabled={trail.length === 0}
+          onClick={() => exportCsvMut.mutate()}
+          disabled={trail.length === 0 || exportCsvMut.isPending}
           className="rounded-[9px] border border-v2-line-strong bg-v2-card px-3.5 py-2 text-[13px] font-[650] text-v2-ink disabled:opacity-50"
         >
-          ⇩ Exportar CSV
+          {exportCsvMut.isPending ? "Exportando…" : "⇩ Exportar CSV"}
         </button>
       </div>
 
@@ -191,7 +221,7 @@ function Screen() {
         <div className="flex-1 rounded-xl border border-v2-line bg-v2-card px-4 py-[13px]">
           <div className="text-[12px] text-v2-ink-3">Eventos registrados (30d)</div>
           <div className="mt-[3px] text-[20px] font-[650] text-v2-ink">
-            {isLoading ? "…" : accessCount30d.toLocaleString("pt-BR")}
+            {accessCount30d === undefined ? "…" : accessCount30d.toLocaleString("pt-BR")}
           </div>
         </div>
         <div className="flex-1 rounded-xl border border-v2-line bg-v2-card px-4 py-[13px]">

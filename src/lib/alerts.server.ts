@@ -4,6 +4,7 @@
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { callAiJson } from "@/lib/ai-gateway.server";
+import { fetchAllPages } from "@/lib/pg-paginate";
 
 type Stage = "borbulhando" | "ativo" | "manchete";
 type Level = "amarelo" | "laranja" | "vermelho";
@@ -75,19 +76,20 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
 }> {
   const since = new Date(Date.now() - WINDOW_HOURS * 60 * 60 * 1000).toISOString();
 
-  const { data: analyses, error } = await supabaseAdmin
-    .from("message_analyses")
-    .select(
-      "message_id, topic, neighborhood, sentiment, risk_score, summary, raw_messages!inner(id, group_id, source_id, posted_at, sources(kind))",
-    )
-    .eq("org_id", orgId)
-    .gte("created_at", since)
-    .not("topic", "is", null)
-    .limit(5000);
-
-  if (error) throw new Error(error.message);
-
-  const rows = (analyses ?? []) as unknown as Array<{
+  // A detecção só é confiável se enxergar a JANELA INTEIRA: um `.limit()` alto aqui era
+  // mentira (o PostgREST corta em 1.000 e não avisa), e bucket truncado = alerta não disparado.
+  const rows = (await fetchAllPages((from, to) =>
+    supabaseAdmin
+      .from("message_analyses")
+      .select(
+        "message_id, topic, neighborhood, sentiment, risk_score, summary, raw_messages!inner(id, group_id, source_id, posted_at, sources(kind))",
+      )
+      .eq("org_id", orgId)
+      .gte("created_at", since)
+      .not("topic", "is", null)
+      .order("id", { ascending: true })
+      .range(from, to),
+  )) as unknown as Array<{
     message_id: string;
     topic: string | null;
     neighborhood: string | null;
@@ -211,15 +213,20 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
 export async function detectAlertsAllOrgs(): Promise<
   Array<{ org_id: string; scanned?: number; upserted?: number; error?: string }>
 > {
-  const { data: orgs, error } = await supabaseAdmin
-    .from("organizations")
-    .select("id")
-    .eq("is_demo", false);
-  if (error) throw new Error(error.message);
+  // Cron de todas as orgs: paginado porque "todas" tem que ser todas mesmo — uma org
+  // fora da primeira página ficaria sem detecção para sempre, e em silêncio.
+  const orgs = await fetchAllPages<{ id: string }>((from, to) =>
+    supabaseAdmin
+      .from("organizations")
+      .select("id")
+      .eq("is_demo", false)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const results: Array<{ org_id: string; scanned?: number; upserted?: number; error?: string }> =
     [];
-  for (const o of orgs ?? []) {
+  for (const o of orgs) {
     try {
       const r = await detectAlertsForOrg(o.id);
       results.push({ org_id: o.id, scanned: r.scanned, upserted: r.upserted });

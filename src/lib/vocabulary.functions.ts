@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { fetchAllPages } from "@/lib/pg-paginate";
 import { z } from "zod";
 
 const vocabKinds = [
@@ -17,14 +18,19 @@ export const listVocabulary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ orgId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase
-      .from("org_vocabulary")
-      .select("id, kind, value, aliases, metadata, created_at")
-      .eq("org_id", data.orgId)
-      .order("kind")
-      .order("value");
-    if (error) throw new Error(error.message);
-    return rows ?? [];
+    // O vocabulário não é só o que o usuário digita: `syncAllElectedToVocabulary` cria
+    // uma entrada por eleito alinhado, então passar de 1.000 é plausível. As telas de
+    // Ajustes e Rede contam por `kind` em cima desta lista — truncada, a contagem mente.
+    return fetchAllPages((from, to) =>
+      context.supabase
+        .from("org_vocabulary")
+        .select("id, kind, value, aliases, metadata, created_at")
+        .eq("org_id", data.orgId)
+        .order("kind")
+        .order("value")
+        .order("id", { ascending: true }) // `value` repete entre kinds; `id` fecha a ordem
+        .range(from, to),
+    );
   });
 
 export const addVocabulary = createServerFn({ method: "POST" })

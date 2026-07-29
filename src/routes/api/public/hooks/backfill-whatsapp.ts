@@ -24,10 +24,19 @@ export const Route = createFileRoute("/api/public/hooks/backfill-whatsapp")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { backfillAllInstancesForOrg } = await import("@/lib/backfill.server");
 
+        // Sem orgId no body o hook roda para TODAS as orgs — paginado, senão uma org fora da
+        // primeira página de 1.000 nunca teria backfill, em silêncio.
+        const { fetchAllPages } = await import("@/lib/pg-paginate");
         const orgs = body.orgId
           ? [{ id: body.orgId }]
-          : ((await supabaseAdmin.from("organizations").select("id").eq("is_demo", false)).data ??
-            []);
+          : await fetchAllPages<{ id: string }>((from, to) =>
+              supabaseAdmin
+                .from("organizations")
+                .select("id")
+                .eq("is_demo", false)
+                .order("id", { ascending: true })
+                .range(from, to),
+            );
 
         const results: Record<string, unknown> = {};
         for (const o of orgs) {

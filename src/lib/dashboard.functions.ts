@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { countExact } from "@/lib/pg-paginate";
 import { z } from "zod";
 
 export const getDashboard = createServerFn({ method: "GET" })
@@ -16,6 +17,7 @@ export const getDashboard = createServerFn({ method: "GET" })
       { count: monitored },
       { count: totalGroups },
       { count: analyzed7 },
+      openAlertsTotal,
     ] = await Promise.all([
       context.supabase
         .from("raw_messages")
@@ -60,6 +62,16 @@ export const getDashboard = createServerFn({ method: "GET" })
         .select("id", { count: "exact", head: true })
         .eq("org_id", data.orgId)
         .gte("created_at", new Date(Date.now() - 7 * 86400_000).toISOString()),
+      // O total de alertas abertos NÃO pode sair de `alerts.length`: aquela lista é só o top 10
+      // para exibição. Contagem separada (head-only, sem trazer linhas) para o número na tela.
+      countExact(
+        context.supabase
+          .from("alerts")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", data.orgId)
+          .is("acknowledged_at", null)
+          .is("resolved_at", null),
+      ),
     ]);
 
     // KPIs derived
@@ -70,7 +82,8 @@ export const getDashboard = createServerFn({ method: "GET" })
 
     return {
       msg24h: msg24 ?? 0,
-      alerts: alerts ?? [],
+      alerts: alerts ?? [], // top 10 para exibição — não use `.length` como total
+      openAlertsTotal,
       topics: topics ?? [],
       recentCritical: recent ?? [],
       kpi: {

@@ -10,6 +10,7 @@ import {
   toggleGroupMonitoring,
 } from "@/lib/whatsapp.functions";
 import { listVocabulary } from "@/lib/vocabulary.functions";
+import { fetchAllPages } from "@/lib/pg-paginate";
 
 export const Route = createFileRoute("/_app/rede")({
   head: () => ({ meta: [{ title: "Rede — Inpol v2" }] }),
@@ -431,14 +432,21 @@ function TabPessoas({ orgId }: { orgId: string }) {
 
   const { data: stats = [] } = useQuery({
     queryKey: ["member-stats-30d", orgId],
-    queryFn: async () => {
+    queryFn: () => {
       const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const { data } = await supabase
-        .from("member_daily_stats")
-        .select("member_id, message_count, avg_sentiment")
-        .eq("org_id", orgId)
-        .gte("bucket_date", cutoff);
-      return (data ?? []) as MemberStat[];
+      // Paginado porque estas linhas são AGREGADAS abaixo (msgs 30d e sentimento médio por
+      // pessoa): a tabela tem uma linha por pessoa POR DIA, então ~34 pessoas monitoradas já
+      // estouram as 1.000 do PostgREST — e o corte não dá erro, só faz as últimas pessoas da
+      // lista aparecerem com "0 msgs / sem dados".
+      return fetchAllPages<MemberStat>((from, to) =>
+        supabase
+          .from("member_daily_stats")
+          .select("member_id, message_count, avg_sentiment")
+          .eq("org_id", orgId)
+          .gte("bucket_date", cutoff)
+          .order("id", { ascending: true }) // ordem estável: sem isso a paginação repete/pula linhas
+          .range(from, to),
+      );
     },
   });
 

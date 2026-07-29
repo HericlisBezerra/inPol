@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { fetchAllPages } from "@/lib/pg-paginate";
 import { z } from "zod";
 
 export const listInstances = createServerFn({ method: "GET" })
@@ -201,17 +202,21 @@ export const listGroups = createServerFn({ method: "GET" })
     z.object({ orgId: z.string().uuid(), instanceId: z.string().uuid().optional() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    let q = context.supabase
-      .from("whatsapp_groups")
-      .select(
-        "id, instance_id, remote_jid, subject, participant_count, picture_url, is_monitored, neighborhood_tag, monitored_at, tags",
-      )
-      .eq("org_id", data.orgId)
-      .order("subject", { ascending: true });
-    if (data.instanceId) q = q.eq("instance_id", data.instanceId);
-    const { data: rows, error } = await q;
-    if (error) throw new Error(error.message);
-    return rows ?? [];
+    // O sync da Evolution traz TODOS os grupos de cada número — algumas centenas por
+    // instância, e a org pode ter várias. As telas contam em cima desta lista
+    // ("X monitorados de Y"), então truncar em 1.000 falsearia o número na cara do usuário.
+    return fetchAllPages((from, to) => {
+      let q = context.supabase
+        .from("whatsapp_groups")
+        .select(
+          "id, instance_id, remote_jid, subject, participant_count, picture_url, is_monitored, neighborhood_tag, monitored_at, tags",
+        )
+        .eq("org_id", data.orgId)
+        .order("subject", { ascending: true })
+        .order("id", { ascending: true }); // grupos homônimos são comuns — sem isso a página repete
+      if (data.instanceId) q = q.eq("instance_id", data.instanceId);
+      return q.range(from, to);
+    });
   });
 
 export const setGroupTags = createServerFn({ method: "POST" })

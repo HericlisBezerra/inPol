@@ -14,14 +14,26 @@ export const Route = createFileRoute("/api/public/hooks/generate-reports")({
         const body = (await request.json().catch(() => ({}))) as { kind?: string };
         const kind = body.kind === "weekly" || body.kind === "monthly" ? body.kind : "daily";
 
-        const { data: orgs, error } = await supabaseAdmin
-          .from("organizations")
-          .select("id")
-          .eq("is_demo", false);
-        if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+        // "Todas as orgs" tem que ser todas mesmo: sem paginar, uma org fora da primeira página
+        // de 1.000 simplesmente nunca receberia relatório — e sem erro nenhum no cron.
+        const { fetchAllPages } = await import("@/lib/pg-paginate");
+        let orgs: Array<{ id: string }> = [];
+        try {
+          orgs = await fetchAllPages<{ id: string }>((from, to) =>
+            supabaseAdmin
+              .from("organizations")
+              .select("id")
+              .eq("is_demo", false)
+              .order("id", { ascending: true })
+              .range(from, to),
+          );
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          return new Response(JSON.stringify({ error: message }), { status: 500 });
+        }
 
         const results: Array<{ org_id: string; report_id?: string; error?: string }> = [];
-        for (const o of orgs ?? []) {
+        for (const o of orgs) {
           try {
             const id = await generateReport(o.id, kind);
             results.push({ org_id: o.id, report_id: id });

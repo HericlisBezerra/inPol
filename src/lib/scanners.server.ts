@@ -4,6 +4,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { googleSearch, groundedSearch } from "@/lib/web-search.server";
 import { extractReadable } from "@/lib/readability.server";
+import { fetchAllPages } from "@/lib/pg-paginate";
 import { createHash } from "crypto";
 
 const FIRECRAWL = "https://api.firecrawl.dev/v2";
@@ -122,14 +123,21 @@ export async function scanNewsForOrg(
   const hasGoogle = Boolean(process.env.GOOGLE_API_KEY && process.env.GOOGLE_CSE_ID);
   if (!hasFirecrawl && !hasGrounding && !hasGoogle) return { inserted: 0, queries: 0 };
   // Build queries from org_vocabulary: city/facility/opponent terms + neighborhood
-  const { data: vocab } = await supabaseAdmin
-    .from("org_vocabulary")
-    .select("kind, value, aliases")
-    .eq("org_id", orgId);
+  // Sem paginar, os `focus_term`/`news_domain` que definem as buscas poderiam cair fora
+  // de uma fatia arbitrária de 1.000 e o scan varreria a cidade errada, sem erro.
+  const vocab = await fetchAllPages<{ kind: string; value: string; aliases: string[] | null }>(
+    (from, to) =>
+      supabaseAdmin
+        .from("org_vocabulary")
+        .select("kind, value, aliases")
+        .eq("org_id", orgId)
+        .order("id", { ascending: true })
+        .range(from, to),
+  );
   const terms = new Set<string>();
   const focus: string[] = [];
   const domains: string[] = [];
-  for (const v of vocab ?? []) {
+  for (const v of vocab) {
     if (v.kind === "focus_term") focus.push(v.value);
     if (
       v.kind === "neighborhood" ||
@@ -231,12 +239,16 @@ export async function scanNewsForOrg(
 export async function scanNewsAllOrgs(): Promise<
   Array<{ org_id: string; inserted?: number; queries?: number; error?: string }>
 > {
-  const { data: orgs } = await supabaseAdmin
-    .from("organizations")
-    .select("id")
-    .eq("is_demo", false);
+  const orgs = await fetchAllPages<{ id: string }>((from, to) =>
+    supabaseAdmin
+      .from("organizations")
+      .select("id")
+      .eq("is_demo", false)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
   const out: Array<{ org_id: string; inserted?: number; queries?: number; error?: string }> = [];
-  for (const o of orgs ?? []) {
+  for (const o of orgs) {
     try {
       const r = await scanNewsForOrg(o.id);
       out.push({ org_id: o.id, ...r });

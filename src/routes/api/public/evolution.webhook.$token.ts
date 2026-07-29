@@ -53,14 +53,21 @@ export const Route = createFileRoute("/api/public/evolution/webhook/$token")({
           return new Response(JSON.stringify({ ok: true, inserted: 0 }), { status: 200 });
         }
 
-        // Build group map for monitored groups only
-        const { data: groups } = await supabaseAdmin
-          .from("whatsapp_groups")
-          .select("id, remote_jid")
-          .eq("instance_id", instance.id)
-          .eq("is_monitored", true);
+        // Mapa jid → group_id dos grupos monitorados. Paginado: um grupo que caísse fora da
+        // primeira página não entraria no mapa e suas mensagens seriam ingeridas sem group_id —
+        // ou seja, perderiam o vínculo com bairro/grupo, sem erro nenhum.
+        const { fetchAllPages } = await import("@/lib/pg-paginate");
+        const groups = await fetchAllPages<{ id: string; remote_jid: string }>((from, to) =>
+          supabaseAdmin
+            .from("whatsapp_groups")
+            .select("id, remote_jid")
+            .eq("instance_id", instance.id)
+            .eq("is_monitored", true)
+            .order("id", { ascending: true })
+            .range(from, to),
+        );
         const groupMap = new Map<string, string>();
-        for (const g of groups ?? []) groupMap.set(g.remote_jid, g.id);
+        for (const g of groups) groupMap.set(g.remote_jid, g.id);
 
         const result = await ingestEvolutionMessages(
           { orgId: instance.org_id, sourceId: instance.source_id, authorSalt: salt },

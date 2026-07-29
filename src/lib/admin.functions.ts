@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { fetchAllPages } from "@/lib/pg-paginate";
 import { z } from "zod";
 
 async function assertPlatformAdmin(userId: string) {
@@ -31,30 +32,51 @@ export const adminListUsers = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await assertPlatformAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: authList, error } = await supabaseAdmin.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
-    });
-    if (error) throw new Error(error.message);
-    const users = authList.users;
+    // GoTrue também trunca: `listUsers` devolve no máximo uma página. Ficar só na
+    // primeira faria o painel esconder usuários reais sem nenhum aviso.
+    const PER_PAGE = 200;
+    type AuthUser = Awaited<
+      ReturnType<typeof supabaseAdmin.auth.admin.listUsers>
+    >["data"]["users"][number];
+    const users: AuthUser[] = [];
+    for (let page = 1; page <= 50; page++) {
+      const { data: authList, error } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage: PER_PAGE,
+      });
+      if (error) throw new Error(error.message);
+      users.push(...authList.users);
+      if (authList.users.length < PER_PAGE) break;
+    }
     const ids = users.map((u) => u.id);
 
-    const [{ data: profiles }, { data: memberships }, { data: admins }] = await Promise.all([
+    const [{ data: profiles }, memberships, { data: admins }] = await Promise.all([
       supabaseAdmin.from("profiles").select("id, email, full_name, avatar_url").in("id", ids),
-      supabaseAdmin
-        .from("org_members")
-        .select("user_id, org_id, role, organizations(id, name)")
-        .in("user_id", ids),
+      // Um usuário pode pertencer a várias orgs, então este conjunto é múltiplo de `ids`
+      // e é o único dos três que consegue passar do teto de 1.000.
+      fetchAllPages<{
+        user_id: string;
+        org_id: string;
+        role: string;
+        organizations: { id: string; name: string } | null;
+      }>((from, to) =>
+        supabaseAdmin
+          .from("org_members")
+          .select("user_id, org_id, role, organizations(id, name)")
+          .in("user_id", ids)
+          .order("user_id", { ascending: true })
+          .order("org_id", { ascending: true }) // (user_id, org_id) é único: ordem determinística
+          .range(from, to),
+      ),
       supabaseAdmin.from("platform_admins").select("user_id").in("user_id", ids),
     ]);
 
     const adminSet = new Set((admins ?? []).map((a) => a.user_id));
     const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
     const memberMap = new Map<string, Array<{ org_id: string; org_name: string; role: string }>>();
-    for (const m of memberships ?? []) {
+    for (const m of memberships) {
       const arr = memberMap.get(m.user_id) ?? [];
-      const org = m.organizations as { id: string; name: string } | null;
-      arr.push({ org_id: m.org_id, org_name: org?.name ?? "?", role: m.role });
+      arr.push({ org_id: m.org_id, org_name: m.organizations?.name ?? "?", role: m.role });
       memberMap.set(m.user_id, arr);
     }
 
@@ -169,12 +191,16 @@ export const adminListOrgs = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await assertPlatformAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
-      .from("organizations")
-      .select("id, name, city, state, slug, is_demo, created_at")
-      .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return data ?? [];
+    // Lista global da plataforma (sem filtro de org) — é o conjunto que mais cresce
+    // com a base de clientes, e o painel admin conta em cima dele.
+    return fetchAllPages((from, to) =>
+      supabaseAdmin
+        .from("organizations")
+        .select("id, name, city, state, slug, is_demo, created_at")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }) // created_at empata em criação em lote/seed
+        .range(from, to),
+    );
   });
 
 export const adminCreateOrg = createServerFn({ method: "POST" })
@@ -308,12 +334,15 @@ export const adminListOrgNumbers = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await assertPlatformAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
-      .from("org_whatsapp_numbers")
-      .select("id, phone_jid, label, assigned_at, org_id, organizations(id, name)")
-      .order("assigned_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return data ?? [];
+    // Também é lista global: acumula um registro por número de toda a plataforma.
+    return fetchAllPages((from, to) =>
+      supabaseAdmin
+        .from("org_whatsapp_numbers")
+        .select("id, phone_jid, label, assigned_at, org_id, organizations(id, name)")
+        .order("assigned_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
   });
 
 export const adminAssignOrgNumber = createServerFn({ method: "POST" })

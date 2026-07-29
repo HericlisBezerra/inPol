@@ -7,6 +7,7 @@
 // determinístico (nunca cai para o texto cru). O caminho crítico é always-on: o determinístico.
 
 import { callAiJson, MODEL_DEEPSEEK, MODEL_FLASH } from "@/lib/ai-gateway.server";
+import { fetchAllPages } from "@/lib/pg-paginate";
 import {
   sanitizeReportMarkdown,
   redactNames,
@@ -58,19 +59,43 @@ export async function sanitizeReportForPublic(
 ): Promise<PublicSanitizeResult> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+  // As três listas são PAGINADAS de propósito: elas são a denylist/allowlist que decide o que
+  // sai redigido no link PÚBLICO. Truncar em 1.000 (teto do PostgREST) não dá erro — só faz um
+  // nome de grupo ou fonte passar batido e vazar no relatório publicado. Uma org com muitos
+  // grupos sincronizados da Evolution passa de 1.000 sem esforço.
   const [groups, sources, vocab] = await Promise.all([
-    supabaseAdmin.from("whatsapp_groups").select("subject").eq("org_id", orgId),
-    supabaseAdmin.from("sources").select("label").eq("org_id", orgId),
-    supabaseAdmin.from("org_vocabulary").select("value, aliases").eq("org_id", orgId),
+    fetchAllPages<{ subject: string | null }>((from, to) =>
+      supabaseAdmin
+        .from("whatsapp_groups")
+        .select("subject")
+        .eq("org_id", orgId)
+        .order("id", { ascending: true }) // ordem estável: sem isso a paginação repete/pula linhas
+        .range(from, to),
+    ),
+    fetchAllPages<{ label: string | null }>((from, to) =>
+      supabaseAdmin
+        .from("sources")
+        .select("label")
+        .eq("org_id", orgId)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllPages<{ value: string; aliases: string[] | null }>((from, to) =>
+      supabaseAdmin
+        .from("org_vocabulary")
+        .select("value, aliases")
+        .eq("org_id", orgId)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
   ]);
 
-  const groupNames = [
-    ...(groups.data ?? []).map((g) => g.subject as string | null),
-    ...(sources.data ?? []).map((s) => s.label as string | null),
-  ].filter((s): s is string => !!s && s.trim().length > 0);
+  const groupNames = [...groups.map((g) => g.subject), ...sources.map((s) => s.label)].filter(
+    (s): s is string => !!s && s.trim().length > 0,
+  );
 
-  const allowTerms = (vocab.data ?? [])
-    .flatMap((v) => [v.value as string, ...((v.aliases as string[] | null) ?? [])])
+  const allowTerms = vocab
+    .flatMap((v) => [v.value, ...(v.aliases ?? [])])
     .filter((s): s is string => !!s && s.trim().length > 0);
 
   // 1) Determinístico (always-on): telefone, horário, grupo.

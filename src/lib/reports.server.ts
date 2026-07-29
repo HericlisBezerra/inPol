@@ -4,28 +4,9 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { callAi, MODEL_PRO, MODEL_FLASH, MODEL_DEEPSEEK } from "./ai-gateway.server";
 import { buildFallbackReport } from "./report-fallback";
+import { fetchAllPages } from "./pg-paginate";
 
 type Kind = "daily" | "weekly" | "monthly";
-
-/** O PostgREST corta TODA resposta em `db-max-rows` (1.000 no Supabase) e ignora
- *  silenciosamente um `.limit()` maior — então uma única query NUNCA vê o período inteiro.
- *  Este helper pagina com `.range()` até acabar. Use só com colunas leves: é feito para
- *  contar/agregar, não para trazer texto de mensagem. */
-const PAGE = 1000;
-const MAX_ROWS = 60_000; // trava de segurança (mensal cabe folgado)
-async function fetchAllPages<T>(
-  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
-): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; from < MAX_ROWS; from += PAGE) {
-    const { data, error } = await page(from, from + PAGE - 1);
-    if (error) throw new Error(String((error as { message?: string })?.message ?? error));
-    const rows = data ?? [];
-    out.push(...rows);
-    if (rows.length < PAGE) break;
-  }
-  return out;
-}
 
 function periodFor(kind: Kind, now = new Date()): { start: Date; end: Date; title: string } {
   const end = now;

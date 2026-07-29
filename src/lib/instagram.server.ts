@@ -4,6 +4,7 @@
 //   2. org_adversaries.handle (adversários com @handle preenchido)
 // Noop se APIFY_API_TOKEN não estiver configurado.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { fetchAllPages } from "@/lib/pg-paginate";
 import { createHash } from "crypto";
 
 const APIFY_BASE = "https://api.apify.com/v2";
@@ -250,12 +251,16 @@ export async function scanInstagramForOrgLegacy(
 export async function scanInstagramAllOrgs(): Promise<
   Array<{ org_id: string; inserted?: number; handles?: number; error?: string }>
 > {
-  const { data: orgs } = await supabaseAdmin
-    .from("organizations")
-    .select("id")
-    .eq("is_demo", false);
+  const orgs = await fetchAllPages<{ id: string }>((from, to) =>
+    supabaseAdmin
+      .from("organizations")
+      .select("id")
+      .eq("is_demo", false)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
   const out: Array<{ org_id: string; inserted?: number; handles?: number; error?: string }> = [];
-  for (const o of orgs ?? []) {
+  for (const o of orgs) {
     try {
       const r = await scanInstagramForOrg(o.id);
       out.push({ org_id: o.id, ...r });

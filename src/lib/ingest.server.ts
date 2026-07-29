@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { createHash } from "crypto";
 import { analyzeBatch, type VocabularyContext, type AnalysisOutput } from "./analysis.server";
 import { preClassify, type VocabMatches } from "./micro-heuristics";
+import { fetchAllPages } from "@/lib/pg-paginate";
 
 export interface EvolutionMessagePayload {
   key?: { id?: string; remoteJid?: string; fromMe?: boolean; participant?: string };
@@ -219,11 +220,17 @@ export async function ingestEvolutionMessages(
   return { inserted, skipped };
 }
 
+// Vocabulário nunca pode vir cortado: termo ausente vira classificação errada sem erro nenhum
+// (a mensagem só deixa de casar). Paginado — abaixo de 1.000 linhas custa a mesma ida ao banco.
 async function loadVocabulary(orgId: string): Promise<VocabularyContext> {
-  const { data } = await supabaseAdmin
-    .from("org_vocabulary")
-    .select("kind, value")
-    .eq("org_id", orgId);
+  const data = await fetchAllPages<{ kind: string; value: string }>((from, to) =>
+    supabaseAdmin
+      .from("org_vocabulary")
+      .select("kind, value")
+      .eq("org_id", orgId)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
   const ctx: VocabularyContext = {
     neighborhoods: [],
     opponents: [],
@@ -233,7 +240,7 @@ async function loadVocabulary(orgId: string): Promise<VocabularyContext> {
     sensitive_terms: [],
     focus_terms: [],
   };
-  for (const row of data ?? []) {
+  for (const row of data) {
     switch (row.kind) {
       case "neighborhood":
         ctx.neighborhoods.push(row.value);
@@ -262,23 +269,42 @@ async function loadVocabulary(orgId: string): Promise<VocabularyContext> {
 }
 
 async function loadVocabularyRows(orgId: string): Promise<VocabularyRow[]> {
-  const { data } = await supabaseAdmin
-    .from("org_vocabulary")
-    .select("kind, value, aliases")
-    .eq("org_id", orgId);
-  return (data ?? []) as VocabularyRow[];
+  return fetchAllPages<VocabularyRow>((from, to) =>
+    supabaseAdmin
+      .from("org_vocabulary")
+      .select("kind, value, aliases")
+      .eq("org_id", orgId)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 }
 
 export async function runAnalysisForMessages(orgId: string, messageIds: string[]): Promise<void> {
   if (messageIds.length === 0) return;
 
-  const { data: msgs } = await supabaseAdmin
-    .from("raw_messages")
-    .select(
-      "id, content, group:whatsapp_groups(subject, neighborhood_tag), source:sources(kind, label)",
-    )
-    .in("id", messageIds);
-  if (!msgs || msgs.length === 0) return;
+  // O backfill pode entregar milhares de ids de uma vez; um `.in()` único devolveria no máximo
+  // 1.000 linhas (teto do PostgREST, silencioso) e o resto nunca seria analisado. Fatiar em
+  // blocos abaixo do teto resolve o corte e ainda evita URL gigante no `.in()`.
+  const ID_CHUNK = 500;
+  type GroupRef = { subject: string | null; neighborhood_tag: string | null };
+  type SourceRef = { kind: string; label: string | null };
+  const msgs: Array<{
+    id: string;
+    content: string | null;
+    group: GroupRef | GroupRef[] | null;
+    source: SourceRef | SourceRef[] | null;
+  }> = [];
+  for (let i = 0; i < messageIds.length; i += ID_CHUNK) {
+    const { data, error } = await supabaseAdmin
+      .from("raw_messages")
+      .select(
+        "id, content, group:whatsapp_groups(subject, neighborhood_tag), source:sources(kind, label)",
+      )
+      .in("id", messageIds.slice(i, i + ID_CHUNK));
+    if (error) throw new Error(error.message);
+    if (data) msgs.push(...(data as unknown as typeof msgs));
+  }
+  if (msgs.length === 0) return;
 
   const [vocab, vocabRows] = await Promise.all([loadVocabulary(orgId), loadVocabularyRows(orgId)]);
 
@@ -453,15 +479,19 @@ export async function runAnalysisForPendingMessages(
 export async function runAnalysisForPendingAllOrgs(
   limitPerOrg = 60,
 ): Promise<Array<{ org_id: string; analyzed?: number; selected?: number; error?: string }>> {
-  const { data: orgs, error } = await supabaseAdmin
-    .from("organizations")
-    .select("id")
-    .eq("is_demo", false);
-  if (error) throw new Error(error.message);
+  // Ver comentário em detectAlertsAllOrgs: "todas as orgs" tem que ser todas mesmo.
+  const orgs = await fetchAllPages<{ id: string }>((from, to) =>
+    supabaseAdmin
+      .from("organizations")
+      .select("id")
+      .eq("is_demo", false)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const results: Array<{ org_id: string; analyzed?: number; selected?: number; error?: string }> =
     [];
-  for (const org of orgs ?? []) {
+  for (const org of orgs) {
     try {
       const result = await runAnalysisForPendingMessages(org.id, limitPerOrg);
       results.push({ org_id: org.id, ...result });

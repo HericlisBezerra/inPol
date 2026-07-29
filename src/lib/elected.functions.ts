@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { fetchAllPages } from "@/lib/pg-paginate";
 import { z } from "zod";
 
 const TSE_BASE = "https://divulgacandcontas.tse.jus.br/divulga/rest/v1";
@@ -146,18 +147,22 @@ export const listElected = createServerFn({ method: "GET" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    let q = context.supabase
-      .from("elected_officials")
-      .select("*")
-      .eq("org_id", data.orgId)
-      .order("is_elected", { ascending: false })
-      .order("cargo_nome")
-      .order("nome");
-    if (data.onlyElected) q = q.eq("is_elected", true);
-    if (data.alignment && data.alignment !== "all") q = q.eq("alignment", data.alignment);
-    const { data: rows, error } = await q;
-    if (error) throw new Error(error.message);
-    return rows ?? [];
+    // Uma importação do TSE traz TODOS os candidatos do município (não só os eleitos) —
+    // em cidade média são centenas por eleição, e a org acumula vários anos. Sem paginar,
+    // o PostgREST cortaria em 1.000 e a tela mostraria "N vereadores" a menos.
+    return fetchAllPages((from, to) => {
+      let q = context.supabase
+        .from("elected_officials")
+        .select("*")
+        .eq("org_id", data.orgId)
+        .order("is_elected", { ascending: false })
+        .order("cargo_nome")
+        .order("nome")
+        .order("id", { ascending: true }); // desempate único: homônimos não bagunçam as páginas
+      if (data.onlyElected) q = q.eq("is_elected", true);
+      if (data.alignment && data.alignment !== "all") q = q.eq("alignment", data.alignment);
+      return q.range(from, to);
+    });
   });
 
 const ALIGNMENT_TO_VOCAB: Record<string, "opponent" | "ally" | "focus_term" | null> = {
@@ -265,14 +270,19 @@ export const syncAllElectedToVocabulary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ orgId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase
-      .from("elected_officials")
-      .select("id, alignment")
-      .eq("org_id", data.orgId)
-      .in("alignment", ["ally", "opponent", "management"]);
-    if (error) throw new Error(error.message);
+    // Processamento em lote: precisa do conjunto inteiro, senão parte dos alinhados
+    // ficaria fora do vocabulário — e o `synced` devolvido mentiria.
+    const rows = await fetchAllPages<{ id: string; alignment: string }>((from, to) =>
+      context.supabase
+        .from("elected_officials")
+        .select("id, alignment")
+        .eq("org_id", data.orgId)
+        .in("alignment", ["ally", "opponent", "management"])
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
     let synced = 0;
-    for (const r of rows ?? []) {
+    for (const r of rows) {
       await syncElectedToVocabulary(
         context.supabase,
         data.orgId,

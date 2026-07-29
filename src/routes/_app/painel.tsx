@@ -147,7 +147,9 @@ function Painel() {
     };
   });
 
-  const openCount = alerts.length;
+  // Total real de alertas abertos — NÃO `alerts.length`: essa lista é limitada a 10 para os
+  // cards, então a manchete travava em "10 assuntos" mesmo com 25 abertos.
+  const openCount = data?.openAlertsTotal ?? alerts.length;
   const syncLabel = dataUpdatedAt
     ? `SINCRONIZADO ${timeAgo(new Date(dataUpdatedAt).toISOString())}`
     : "";
