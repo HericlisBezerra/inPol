@@ -9,8 +9,11 @@ import {
   refreshGroups,
   toggleGroupMonitoring,
 } from "@/lib/whatsapp.functions";
+import { listPeople } from "@/lib/people.functions";
 import { listVocabulary } from "@/lib/vocabulary.functions";
 import { fetchAllPages } from "@/lib/pg-paginate";
+import { PersonSheet } from "@/components/v2/person-sheet";
+import { STANCE_TONE, initialsOfName } from "@/components/v2/person-shared";
 
 export const Route = createFileRoute("/_app/rede")({
   head: () => ({ meta: [{ title: "Rede — Inpol v2" }] }),
@@ -19,46 +22,57 @@ export const Route = createFileRoute("/_app/rede")({
 
 /**
  * S9 + S23 + S10 — Rede consolidada: Adversários / Pessoas / Grupos em abas.
- * Dados reais via org_adversaries, org_instagram_targets, tracked_members,
- * member_daily_stats e whatsapp.functions (listInstances/listGroups/...).
- * Métricas que o schema não modela (ex.: MSGS 7D por grupo, jogadas/sinais
- * comportamentais inferidos) ficam em estado vazio honesto — nunca inventadas.
+ *
+ * As abas Adversários e Pessoas agora leem a MESMA fonte — `org_people` via listPeople —
+ * porque adversário e pessoa monitorada deixaram de ser tabelas diferentes: são a mesma
+ * ficha com `stance` diferente. Antes, mudar alguém de lado exigia recadastrar; e o @ do
+ * Instagram, o WhatsApp e o nome que a IA reconhece ficavam em três telas separadas.
+ * Clicar em qualquer linha/card abre a ficha única (PersonSheet), onde tudo é editado.
+ *
+ * Métricas que o schema não modela (ex.: MSGS 7D por grupo) ficam em estado vazio
+ * honesto — nunca inventadas.
  */
 type TabId = "adversarios" | "pessoas" | "grupos";
 
-function initialsOf(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+/** Linha de `org_people` (contrato de people.functions). */
+type PersonRow = {
+  id: string;
+  display_name: string;
+  stance: "adversario" | "aliado" | "neutro" | "interno";
+  party: string | null;
+  role: string | null;
+  department_id: string | null;
+  department_name: string | null;
+  vocabulary_id: string | null;
+  elected_official_id: string | null;
+  elected_name: string | null;
+  avatar_url: string | null;
+  neighborhood: string | null;
+  tags: string[];
+  notes: string | null;
+  instagram_handle: string | null;
+  instagram_active: boolean | null;
+  whatsapp_count: number;
+  created_at: string;
+  updated_at: string;
+};
 
 function Screen() {
   const { orgId } = useCurrentOrg();
   const [tab, setTab] = useState<TabId>("adversarios");
+  // `undefined` = ficha fechada; `null` = ficha em modo criação; string = editando.
+  const [sheetId, setSheetId] = useState<string | null | undefined>(undefined);
 
-  const { data: advCount } = useQuery({
-    queryKey: ["rede-count-adversaries", orgId],
+  const {
+    data: people = [],
+    isLoading: peopleLoading,
+    isError: peopleError,
+  } = useQuery({
+    queryKey: ["people", orgId],
     enabled: !!orgId,
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("org_adversaries")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", orgId!);
-      return count ?? 0;
-    },
+    queryFn: () => listPeople({ data: { orgId: orgId as string } }) as Promise<PersonRow[]>,
   });
-  const { data: peopleCount } = useQuery({
-    queryKey: ["rede-count-members", orgId],
-    enabled: !!orgId,
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("tracked_members")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", orgId!);
-      return count ?? 0;
-    },
-  });
+
   const { data: groupsCount } = useQuery({
     queryKey: ["rede-count-groups", orgId],
     enabled: !!orgId,
@@ -77,9 +91,11 @@ function Screen() {
   });
   const fontesCount = vocab.filter((v) => v.kind === "news_domain").length;
 
+  const adversaries = useMemo(() => people.filter((p) => p.stance === "adversario"), [people]);
+
   const TABS: { id: TabId; label: string; count: number | null }[] = [
-    { id: "adversarios", label: "⚔ Adversários", count: advCount ?? null },
-    { id: "pessoas", label: "👤 Pessoas", count: peopleCount ?? null },
+    { id: "adversarios", label: "⚔ Adversários", count: peopleLoading ? null : adversaries.length },
+    { id: "pessoas", label: "👤 Pessoas", count: peopleLoading ? null : people.length },
     { id: "grupos", label: "💬 Grupos", count: groupsCount ?? null },
   ];
 
@@ -97,9 +113,14 @@ function Screen() {
             Quem influencia o território: adversários, lideranças, grupos e fontes monitoradas.
           </p>
         </div>
-        <button className="rounded-lg bg-v2-ink px-4 py-[9px] text-[13px] font-[650] text-white">
-          ＋ Adicionar
-        </button>
+        {tab !== "grupos" && (
+          <button
+            onClick={() => setSheetId(null)}
+            className="rounded-lg bg-v2-ink px-4 py-[9px] text-[13px] font-[650] text-white"
+          >
+            ＋ Adicionar pessoa
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -131,21 +152,38 @@ function Screen() {
         </Link>
       </div>
 
-      {tab === "adversarios" && <TabAdversarios orgId={orgId} />}
-      {tab === "pessoas" && <TabPessoas orgId={orgId} />}
+      {tab === "adversarios" && (
+        <TabAdversarios
+          orgId={orgId}
+          adversaries={adversaries}
+          isLoading={peopleLoading}
+          isError={peopleError}
+          onOpen={setSheetId}
+        />
+      )}
+      {tab === "pessoas" && (
+        <TabPessoas
+          orgId={orgId}
+          people={people}
+          isLoading={peopleLoading}
+          isError={peopleError}
+          onOpen={setSheetId}
+        />
+      )}
       {tab === "grupos" && <TabGrupos orgId={orgId} />}
+
+      {sheetId !== undefined && (
+        <PersonSheet orgId={orgId} personId={sheetId} onClose={() => setSheetId(undefined)} />
+      )}
     </div>
   );
 }
 
 /* ─────────────────────────── Aba Adversários (S9) ─────────────────────────── */
 
-type Adv = {
-  id: string;
-  display_name: string;
-  handle: string | null;
-  role: string | null;
-  party: string | null;
+/** Sinais legados que ainda vivem em `org_adversaries` e não migraram para org_people. */
+type AdvSignals = {
+  person_id: string | null;
   activity_score: number;
   top_topics: unknown;
   recent_actions: unknown;
@@ -168,22 +206,44 @@ const KIND_LABEL: Record<IgTarget["kind"], string> = {
   other: "Outro",
 };
 
-function TabAdversarios({ orgId }: { orgId: string }) {
-  const {
-    data: adversaries = [],
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["org-adversaries", orgId],
+function TabAdversarios({
+  orgId,
+  adversaries,
+  isLoading,
+  isError,
+  onOpen,
+}: {
+  orgId: string;
+  adversaries: PersonRow[];
+  isLoading: boolean;
+  isError: boolean;
+  onOpen: (id: string) => void;
+}) {
+  // Score de atividade e "últimas jogadas" continuam em org_adversaries (a migração foi
+  // aditiva). Cruzamos por person_id para não perder esses sinais enquanto não migram.
+  const { data: signals = [] } = useQuery({
+    queryKey: ["adversary-signals", orgId],
     queryFn: async () => {
+      // Select numa `const string`: com literal, o typegen tenta resolver `person_id` na
+      // definição desatualizada (types.ts é auto-gerado e ainda não conhece a coluna) e
+      // derruba a query inteira num SelectQueryError. Mesmo padrão de reports.server.ts.
+      const cols: string = "person_id, activity_score, top_topics, recent_actions";
       const { data } = await supabase
         .from("org_adversaries")
-        .select("id, display_name, handle, role, party, activity_score, top_topics, recent_actions")
+        .select(cols)
         .eq("org_id", orgId)
-        .order("activity_score", { ascending: false });
-      return (data ?? []) as Adv[];
+        .returns<AdvSignals[]>();
+      return data ?? [];
     },
   });
+
+  const signalByPerson = useMemo(() => {
+    const map = new Map<string, AdvSignals>();
+    signals.forEach((s) => {
+      if (s.person_id) map.set(s.person_id, s);
+    });
+    return map;
+  }, [signals]);
 
   const { data: igTargets = [], isLoading: igLoading } = useQuery({
     queryKey: ["ig-targets", orgId],
@@ -198,7 +258,19 @@ function TabAdversarios({ orgId }: { orgId: string }) {
     },
   });
 
-  const top = adversaries[0];
+  const ordered = useMemo(
+    () =>
+      [...adversaries].sort(
+        (a, b) =>
+          (signalByPerson.get(b.id)?.activity_score ?? 0) -
+            (signalByPerson.get(a.id)?.activity_score ?? 0) ||
+          a.display_name.localeCompare(b.display_name, "pt-BR"),
+      ),
+    [adversaries, signalByPerson],
+  );
+
+  const top = ordered[0];
+  const topScore = top ? (signalByPerson.get(top.id)?.activity_score ?? 0) : 0;
 
   return (
     <div>
@@ -210,48 +282,45 @@ function TabAdversarios({ orgId }: { orgId: string }) {
 
       {isLoading && <div className="text-[12.5px] text-v2-ink-3">Carregando…</div>}
 
-      {!isLoading && adversaries.length === 0 && (
+      {!isLoading && !isError && ordered.length === 0 && (
         <div className="rounded-[13px] border border-v2-line bg-v2-card px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
-          Nenhum adversário cadastrado.
+          Nenhum adversário cadastrado. Use “＋ Adicionar pessoa” e marque o posicionamento como
+          Adversário.
         </div>
       )}
 
-      {adversaries.length > 0 && (
+      {ordered.length > 0 && (
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
-          {adversaries.map((a) => {
-            const tone: "crit" | "warn" = a.activity_score >= 70 ? "crit" : "warn";
-            const badge = a.activity_score >= 70 ? "MUITO ATIVO" : "ATIVO";
-            const meta = [a.role, a.party, a.handle ? `@${a.handle.replace(/^@/, "")}` : null]
-              .filter(Boolean)
-              .join(" · ");
-            const tags = Array.isArray(a.top_topics) ? (a.top_topics as string[]) : [];
-            const plays = Array.isArray(a.recent_actions)
-              ? (a.recent_actions as { date: string; action: string }[]).map((x) => ({
+          {ordered.map((p) => {
+            const sig = signalByPerson.get(p.id);
+            const score = sig?.activity_score ?? 0;
+            const topTopics = sig?.top_topics;
+            const recentActions = sig?.recent_actions;
+            const tags = Array.isArray(topTopics) ? (topTopics as string[]) : p.tags;
+            const plays = Array.isArray(recentActions)
+              ? (recentActions as { date: string; action: string }[]).map((x) => ({
                   when: x.date,
                   text: x.action,
                 }))
               : [];
             return (
               <AdversaryCard
-                key={a.id}
-                initials={initialsOf(a.display_name)}
-                tone={tone}
-                name={a.display_name}
-                badge={badge}
-                meta={meta || "—"}
-                score={a.activity_score}
+                key={p.id}
+                person={p}
+                score={score}
                 tags={tags}
                 plays={plays}
+                onOpen={() => onOpen(p.id)}
               />
             );
           })}
         </div>
       )}
 
-      {top && top.activity_score > 0 && (
+      {top && topScore > 0 && (
         <AiHint>
           <b>{top.display_name}</b> é quem concentra mais atividade mapeada no momento (score{" "}
-          {top.activity_score}).
+          {topScore}).
         </AiHint>
       )}
 
@@ -259,11 +328,17 @@ function TabAdversarios({ orgId }: { orgId: string }) {
       <div className="mt-5 overflow-hidden rounded-[13px] border border-v2-line bg-v2-card">
         <div className="flex items-center justify-between border-b border-v2-track px-5 py-3.5">
           <span className="text-[14px] font-[650] text-v2-ink">📸 Instagram monitorado</span>
-          <button className="text-[12.5px] font-[650] text-v2-green">＋ Adicionar handle</button>
+          {/* Não há mais "adicionar handle" avulso: o @ passou a ser um campo da ficha da
+              pessoa, para que preenchê-lo signifique de fato ligar a varredura. */}
+          <span className="text-[11.5px] text-v2-ink-3">
+            Os @ são cadastrados na ficha de cada pessoa.
+          </span>
         </div>
         {igLoading && <div className="px-5 py-3.5 text-[12px] text-v2-ink-3">Carregando…</div>}
         {!igLoading && igTargets.length === 0 && (
-          <div className="px-5 py-3.5 text-[12px] text-v2-ink-3">Nenhum handle cadastrado.</div>
+          <div className="px-5 py-3.5 text-[12px] text-v2-ink-3">
+            Nenhum handle cadastrado. Abra a ficha de uma pessoa e preencha o @ do Instagram.
+          </div>
         )}
         {igTargets.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3">
@@ -294,44 +369,72 @@ function TabAdversarios({ orgId }: { orgId: string }) {
 }
 
 function AdversaryCard({
-  initials,
-  tone,
-  name,
-  badge,
-  meta,
+  person,
   score,
   tags,
   plays,
+  onOpen,
 }: {
-  initials: string;
-  tone: "crit" | "warn";
-  name: string;
-  badge: string;
-  meta: string;
+  person: PersonRow;
   score: number;
   tags: string[];
   plays: { when: string; text: string }[];
+  onOpen: () => void;
 }) {
+  const tone: "crit" | "warn" = score >= 70 ? "crit" : "warn";
   const toneText = tone === "crit" ? "text-v2-crit" : "text-v2-warn";
   const toneBg = tone === "crit" ? "bg-v2-crit-bg" : "bg-v2-warn-bg";
+  const badge = score >= 70 ? "MUITO ATIVO" : "ATIVO";
+  const meta =
+    [
+      person.role,
+      person.party,
+      person.department_name,
+      person.instagram_handle ? `@${person.instagram_handle.replace(/^@/, "")}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "—";
+
   return (
-    <div className="rounded-[13px] border border-v2-line bg-v2-card px-5 py-[18px]">
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Abrir ficha de ${person.display_name}`}
+      className="rounded-[13px] border border-v2-line bg-v2-card px-5 py-[18px] text-left transition-colors hover:border-v2-line-strong"
+    >
       <div className="flex items-start gap-3">
         <span
-          className={`grid h-[42px] w-[42px] flex-none place-items-center rounded-full text-[14px] font-semibold ${toneBg} ${toneText}`}
+          className={`grid h-[42px] w-[42px] flex-none place-items-center overflow-hidden rounded-full text-[14px] font-semibold ${toneBg} ${toneText}`}
         >
-          {initials}
+          {person.avatar_url ? (
+            <img src={person.avatar_url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            initialsOfName(person.display_name)
+          )}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[15.5px] font-[650] text-v2-ink">{name}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[15.5px] font-[650] text-v2-ink">{person.display_name}</span>
             <span
               className={`rounded px-[7px] py-0.5 font-mono text-[9.5px] font-bold ${toneBg} ${toneText}`}
             >
               {badge}
             </span>
+            {person.elected_name && (
+              <span className="rounded bg-v2-blue-bg px-[7px] py-0.5 font-mono text-[9.5px] font-bold text-v2-blue">
+                TSE
+              </span>
+            )}
           </div>
           <div className="mt-0.5 text-[12.5px] text-v2-ink-3">{meta}</div>
+          <div className="mt-1 flex gap-2.5 font-mono text-[10.5px] text-v2-faint">
+            <span className={person.instagram_active ? "text-v2-green" : undefined}>
+              📸 {person.instagram_active ? "varrendo" : "sem varredura"}
+            </span>
+            <span className={person.whatsapp_count > 0 ? "text-v2-green" : undefined}>
+              💬 {person.whatsapp_count} whatsapp
+            </span>
+          </div>
         </div>
         <div className="flex-none text-right">
           <div className={`text-[20px] font-[650] ${toneText}`}>{score}</div>
@@ -369,7 +472,7 @@ function AdversaryCard({
           </div>
         ))}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -399,34 +502,42 @@ function InstaHandle({
 
 /* ─────────────────────────── Aba Pessoas (S23) ─────────────────────────── */
 
-type Member = {
-  id: string;
-  display_name: string;
-  role: string;
-  neighborhood: string | null;
-  tags: string[];
-};
-
 type MemberStat = {
   member_id: string;
   message_count: number | null;
   avg_sentiment: number | null;
 };
 
-function TabPessoas({ orgId }: { orgId: string }) {
-  const {
-    data: members = [],
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["tracked-members-rede", orgId],
+function TabPessoas({
+  orgId,
+  people,
+  isLoading,
+  isError,
+  onOpen,
+}: {
+  orgId: string;
+  people: PersonRow[];
+  isLoading: boolean;
+  isError: boolean;
+  onOpen: (id: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [stance, setStance] = useState<"todos" | PersonRow["stance"]>("todos");
+
+  // Volume/sentimento ainda são medidos por `tracked_members.id` (member_daily_stats não
+  // conhece person_id). Este mapa member→person é a ponte enquanto as stats não migram.
+  const { data: memberLinks = [] } = useQuery({
+    queryKey: ["tracked-members-person-map", orgId],
     queryFn: async () => {
+      // `const string` pelo mesmo motivo do bloco de sinais acima: `person_id` ainda não
+      // está no typegen.
+      const cols: string = "id, person_id";
       const { data } = await supabase
         .from("tracked_members")
-        .select("id, display_name, role, neighborhood, tags")
+        .select(cols)
         .eq("org_id", orgId)
-        .order("display_name");
-      return (data ?? []) as Member[];
+        .returns<{ id: string; person_id: string | null }[]>();
+      return data ?? [];
     },
   });
 
@@ -450,77 +561,121 @@ function TabPessoas({ orgId }: { orgId: string }) {
     },
   });
 
+  /** Agregado por PESSOA (soma de todos os tracked_members apontando para ela). */
   const agg = useMemo(() => {
+    const memberToPerson = new Map<string, string>();
+    memberLinks.forEach((m) => {
+      if (m.person_id) memberToPerson.set(m.id, m.person_id);
+    });
     const map = new Map<string, { msgs: number; sent: number; sentN: number }>();
     stats.forEach((s) => {
-      const a = map.get(s.member_id) ?? { msgs: 0, sent: 0, sentN: 0 };
+      const personId = memberToPerson.get(s.member_id);
+      if (!personId) return;
+      const a = map.get(personId) ?? { msgs: 0, sent: 0, sentN: 0 };
       a.msgs += s.message_count ?? 0;
       if (s.avg_sentiment != null) {
         a.sent += Number(s.avg_sentiment);
         a.sentN++;
       }
-      map.set(s.member_id, a);
+      map.set(personId, a);
     });
     return map;
-  }, [stats]);
+  }, [stats, memberLinks]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return people.filter((p) => {
+      if (stance !== "todos" && p.stance !== stance) return false;
+      if (!q) return true;
+      return (
+        p.display_name.toLowerCase().includes(q) ||
+        (p.role ?? "").toLowerCase().includes(q) ||
+        (p.party ?? "").toLowerCase().includes(q) ||
+        (p.neighborhood ?? "").toLowerCase().includes(q) ||
+        (p.department_name ?? "").toLowerCase().includes(q) ||
+        (p.instagram_handle ?? "").toLowerCase().includes(q) ||
+        p.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    });
+  }, [people, search, stance]);
 
   const topByMsgs = useMemo<{ name: string; msgs: number } | null>(() => {
     let best: { name: string; msgs: number } | null = null;
-    members.forEach((m) => {
-      const msgs = agg.get(m.id)?.msgs ?? 0;
-      if (msgs > 0 && (!best || msgs > best.msgs)) best = { name: m.display_name, msgs };
+    people.forEach((p) => {
+      const msgs = agg.get(p.id)?.msgs ?? 0;
+      if (msgs > 0 && (!best || msgs > best.msgs)) best = { name: p.display_name, msgs };
     });
     return best;
-  }, [members, agg]);
+  }, [people, agg]);
 
   return (
     <div>
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2.5">
         <div className="flex w-[280px] items-center gap-2 rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[13px] text-v2-ink-3">
-          ⌕ Buscar pessoa…
+          ⌕
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, cargo, bairro, tag…"
+            aria-label="Buscar pessoa"
+            className="w-full bg-transparent text-[13px] text-v2-ink outline-none placeholder:text-v2-ink-3"
+          />
         </div>
-        <button className="rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[12.5px] font-semibold text-v2-ink-2">
-          Papel ⌄
-        </button>
-        <button className="rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[12.5px] font-semibold text-v2-ink-2">
-          Bairro ⌄
-        </button>
+        <select
+          value={stance}
+          onChange={(e) => setStance(e.target.value as typeof stance)}
+          aria-label="Filtrar por posicionamento"
+          className="rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[12.5px] font-semibold text-v2-ink-2 outline-none"
+        >
+          <option value="todos">Todos os posicionamentos</option>
+          <option value="adversario">Adversários</option>
+          <option value="aliado">Aliados</option>
+          <option value="neutro">Neutros</option>
+          <option value="interno">Internos</option>
+        </select>
         <div className="flex-1" />
-        <button className="rounded-lg bg-v2-ink px-3.5 py-2 text-[13px] font-[650] text-white">
-          ＋ Nova pessoa
-        </button>
+        <span className="font-mono text-[11px] text-v2-ink-3">
+          {filtered.length} de {people.length}
+        </span>
       </div>
 
       {isError && (
         <div className="mb-3 text-[12.5px] text-v2-crit">
-          Não foi possível carregar as pessoas monitoradas. Tente novamente.
+          Não foi possível carregar as pessoas. Tente novamente.
         </div>
       )}
 
       {/* Tabela */}
       <div className="overflow-hidden rounded-[13px] border border-v2-line bg-v2-card">
-        <div className="grid grid-cols-[1.8fr_1fr_1fr_0.7fr_0.8fr_0.7fr] gap-3 border-b border-v2-line px-5 py-[11px] font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
+        <div className="grid grid-cols-[1.9fr_0.9fr_1.1fr_1fr_0.9fr_0.7fr_0.9fr] gap-3 border-b border-v2-line px-5 py-[11px] font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
           <span>NOME</span>
-          <span>PAPEL</span>
+          <span>POSIÇÃO</span>
+          <span>CARGO / SECRETARIA</span>
           <span>BAIRRO</span>
+          <span>CANAIS</span>
           <span>MSGS 30D</span>
           <span>SENTIMENTO</span>
-          <span>SINAL</span>
         </div>
 
         {isLoading && <div className="px-5 py-3.5 text-[12.5px] text-v2-ink-3">Carregando…</div>}
 
-        {!isLoading && members.length === 0 && (
+        {!isLoading && !isError && people.length === 0 && (
           <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
-            Nenhuma pessoa cadastrada.
+            Nenhuma pessoa cadastrada. Use “＋ Adicionar pessoa”.
           </div>
         )}
 
-        {members.map((m, i) => {
-          const a = agg.get(m.id);
+        {people.length > 0 && filtered.length === 0 && (
+          <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
+            Nenhuma pessoa corresponde ao filtro.
+          </div>
+        )}
+
+        {filtered.map((p, i) => {
+          const a = agg.get(p.id);
           const hasStats = !!a && a.sentN > 0;
-          const sent = hasStats ? a!.sent / a!.sentN : 0;
+          const sent = hasStats ? a.sent / a.sentN : 0;
           const sentimentLabel = hasStats
             ? `${sent >= 0 ? "+" : "−"}${Math.abs(sent).toFixed(2)} ${sent > 0.05 ? "▲" : sent < -0.05 ? "▼" : "—"}`
             : "— sem dados";
@@ -531,29 +686,15 @@ function TabPessoas({ orgId }: { orgId: string }) {
               : sent < -0.05
                 ? "crit"
                 : "obs";
-          const signal = !hasStats
-            ? "SEM DADOS"
-            : sent > 0.05
-              ? "SENTIMENTO POSITIVO"
-              : sent < -0.05
-                ? "SENTIMENTO NEGATIVO"
-                : "NEUTRO";
-          const signalTone = sentimentTone;
           return (
-            <PersonRow
-              key={m.id}
-              initials={initialsOf(m.display_name)}
-              avatarTone={hasStats && sent > 0.05 ? "green" : "neutral"}
-              name={m.display_name}
-              sub={(m.tags ?? [])[0] ?? ""}
-              role={m.role.replace(/_/g, " ")}
-              bairro={m.neighborhood ? `📍 ${m.neighborhood}` : "— sem bairro"}
+            <PersonRowLine
+              key={p.id}
+              person={p}
               msgs={String(a?.msgs ?? 0)}
               sentiment={sentimentLabel}
               sentimentTone={sentimentTone}
-              signal={signal}
-              signalTone={signalTone}
-              border={i < members.length - 1}
+              border={i < filtered.length - 1}
+              onOpen={() => onOpen(p.id)}
             />
           );
         })}
@@ -578,64 +719,73 @@ const SENTIMENT_TONE: Record<string, string> = {
   obs: "text-v2-ink-3",
   green: "text-v2-green",
 };
-const SIGNAL_TONE: Record<string, string> = {
-  crit: "bg-v2-crit-bg text-v2-crit",
-  obs: "bg-v2-track text-v2-ink-3",
-  green: "bg-v2-green-tint text-v2-green",
-};
 
-function PersonRow({
-  initials,
-  avatarTone,
-  name,
-  sub,
-  role,
-  bairro,
+function PersonRowLine({
+  person,
   msgs,
   sentiment,
   sentimentTone,
-  signal,
-  signalTone,
   border,
+  onOpen,
 }: {
-  initials: string;
-  avatarTone: string;
-  name: string;
-  sub: string;
-  role: string;
-  bairro: string;
+  person: PersonRow;
   msgs: string;
   sentiment: string;
   sentimentTone: string;
-  signal: string;
-  signalTone: string;
   border?: boolean;
+  onOpen: () => void;
 }) {
+  const tone = STANCE_TONE[person.stance];
+  const cargo = [person.role, person.department_name].filter(Boolean).join(" · ") || "—";
   return (
-    <div
-      className={`grid grid-cols-[1.8fr_1fr_1fr_0.7fr_0.8fr_0.7fr] items-center gap-3 px-5 py-[13px] ${border ? "border-b border-v2-track" : ""}`}
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Abrir ficha de ${person.display_name}`}
+      className={`grid w-full grid-cols-[1.9fr_0.9fr_1.1fr_1fr_0.9fr_0.7fr_0.9fr] items-center gap-3 px-5 py-[13px] text-left transition-colors hover:bg-v2-track/60 ${border ? "border-b border-v2-track" : ""}`}
     >
-      <div className="flex items-center gap-2.5">
+      <span className="flex min-w-0 items-center gap-2.5">
         <span
-          className={`grid h-8 w-8 flex-none place-items-center rounded-full text-[11px] font-semibold ${AVATAR_TONE[avatarTone]}`}
+          className={`grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full text-[11px] font-semibold ${AVATAR_TONE.neutral}`}
         >
-          {initials}
+          {person.avatar_url ? (
+            <img src={person.avatar_url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            initialsOfName(person.display_name)
+          )}
         </span>
-        <div>
-          <div className="text-[13.5px] font-semibold text-v2-ink">{name}</div>
-          {sub && <div className="font-mono text-[10.5px] text-v2-faint">{sub}</div>}
-        </div>
-      </div>
-      <span className="text-[12.5px] capitalize text-v2-ink-2">{role}</span>
-      <span className="text-[12.5px] text-v2-ink-2">{bairro}</span>
+        <span className="min-w-0">
+          <span className="block truncate text-[13.5px] font-semibold text-v2-ink">
+            {person.display_name}
+          </span>
+          <span className="block truncate font-mono text-[10.5px] text-v2-faint">
+            {person.party || person.tags[0] || (person.elected_name ? "via TSE" : "")}
+          </span>
+        </span>
+      </span>
+      <span
+        className={`w-fit rounded px-[7px] py-[3px] font-mono text-[9.5px] font-bold uppercase ${tone.chip}`}
+      >
+        {tone.label}
+      </span>
+      <span className="truncate text-[12.5px] text-v2-ink-2">{cargo}</span>
+      <span className="truncate text-[12.5px] text-v2-ink-2">
+        {person.neighborhood ? `📍 ${person.neighborhood}` : "— sem bairro"}
+      </span>
+      <span className="flex gap-1.5 font-mono text-[10.5px]">
+        <span
+          title={person.instagram_handle ? `@${person.instagram_handle}` : "sem Instagram"}
+          className={person.instagram_active ? "text-v2-green" : "text-v2-faint"}
+        >
+          📸
+        </span>
+        <span className={person.whatsapp_count > 0 ? "text-v2-green" : "text-v2-faint"}>
+          💬{person.whatsapp_count}
+        </span>
+      </span>
       <span className="font-mono text-[12px] text-v2-ink">{msgs}</span>
       <span className={`font-mono text-[12px] ${SENTIMENT_TONE[sentimentTone]}`}>{sentiment}</span>
-      <span
-        className={`w-fit rounded px-[7px] py-[3px] font-mono text-[9.5px] font-bold ${SIGNAL_TONE[signalTone]}`}
-      >
-        {signal}
-      </span>
-    </div>
+    </button>
   );
 }
 
