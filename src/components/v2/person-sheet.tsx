@@ -110,7 +110,7 @@ export function PersonSheet({
   } = useQuery({
     queryKey: ["person", orgId, personId],
     enabled: !isNew,
-    queryFn: () => getPerson({ data: { orgId, id: personId as string } }),
+    queryFn: () => getPerson({ data: { orgId, personId: personId as string } }),
   });
 
   const { data: departments = [] } = useQuery({
@@ -365,8 +365,16 @@ export function PersonSheet({
           {!isNew && isLoading && (
             <div className="text-[12.5px] text-v2-ink-3">Carregando ficha…</div>
           )}
+          {/* Ficha existente que voltou vazia. Sem isto o painel renderiza um formulário em
+              branco idêntico ao de criação — o usuário acha que a pessoa perdeu os dados, e
+              um Salvar ali sobrescreveria a ficha real com vazio. */}
+          {!isNew && !isLoading && !isError && !person && (
+            <div className="rounded-[13px] border border-v2-line bg-v2-warn-bg px-5 py-4 text-[12.5px] text-v2-ink">
+              Ficha não encontrada. Ela pode ter sido removida — feche e recarregue a lista.
+            </div>
+          )}
 
-          {(isNew || (!isLoading && !isError)) && (
+          {(isNew || (!isLoading && !isError && !!person)) && (
             <div className="space-y-4">
               {/* Identidade */}
               <Card title="Identidade">
