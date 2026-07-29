@@ -94,6 +94,21 @@ function riskTone(r: number | undefined) {
   return "text-v2-obs";
 }
 
+/** Descarta amostras que não são fala de gente: boilerplate de scrape de portal
+ *  ("[Pular para o conteúdo](…)", menus, sopa de URL) e fragmentos curtos demais.
+ *  O ideal é filtrar isso na ingestão; aqui é defesa de renderização para a citação
+ *  exibida ser sempre um sinal legítimo. */
+function isUsableQuote(text: string | undefined): boolean {
+  const s = String(text ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (s.length < 25) return false;
+  const linkish = (s.match(/\]\(|https?:\/\//g) ?? []).length;
+  if (linkish >= 2) return false; // 2+ links/URLs → navegação de página, não fala
+  if (/pular para o (conte[úu]do|menu)/i.test(s)) return false;
+  return true;
+}
+
 /** Extrai uma seção do markdown pelo título (ex.: "Resumo executivo") — usada para dar
  *  destaque ao "se você só ler uma coisa" SEM inventar conteúdo: é o texto real da IA. */
 function extractSection(md: string, headingContains: string): string | null {
@@ -187,13 +202,17 @@ function ReportBody({ report }: { report: NonNullable<Awaited<ReturnType<typeof 
 
   const bairros = (d?.top_neighborhoods ?? []).filter((b) => b.label);
   const signals = (d?.external_signals ?? []).filter((s) => s.title);
-  const risky = (d?.high_risk_messages ?? []).filter((m) => m.text);
+  const risky = (d?.high_risk_messages ?? []).filter((m) => isUsableQuote(m.text));
   const opponents = (d?.top_opponents ?? []).filter((o) => Array.isArray(o) && o[0]);
   const resumo = extractSection(md, "resumo executivo");
 
-  // Citações reais: 1–2 amostras dos temas mais relevantes (pula o balde `outros`).
-  const quoteTopics = topics.filter((t) => t.label && !/^outros?$/i.test(t.label)).slice(0, 5);
-  const quoteCount = quoteTopics.reduce((s, t) => s + Math.min(2, t.samples?.length ?? 0), 0);
+  // Citações reais: até 2 amostras por tema relevante (pula o balde `outros` e o lixo de scrape).
+  const quoteTopics = topics
+    .filter((t) => t.label && !/^outros?$/i.test(t.label))
+    .map((t) => ({ ...t, samples: (t.samples ?? []).filter((s) => isUsableQuote(s.text)) }))
+    .filter((t) => t.samples.length > 0)
+    .slice(0, 5);
+  const quoteCount = quoteTopics.reduce((s, t) => s + Math.min(2, t.samples.length), 0);
 
   return (
     <>
