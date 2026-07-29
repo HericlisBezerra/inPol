@@ -8,6 +8,155 @@ import { fetchAllPages } from "./pg-paginate";
 
 type Kind = "daily" | "weekly" | "monthly";
 
+/** Linha de amostra. Escrita à mão porque `content_fingerprint` ainda não está nos tipos
+ *  gerados (migração `message_dedup_fingerprint`) — e `types.ts` é auto-gerado, não se edita. */
+type AmostraBruta = {
+  message_id?: string | null;
+  topic?: string | null;
+  neighborhood?: string | null;
+  sentiment?: number | null;
+  risk_score?: number | null;
+  raw_messages?: RawDaAmostra | RawDaAmostra[] | null;
+};
+type RawDaAmostra = {
+  content?: string | null;
+  posted_at?: string | null;
+  group_id?: string | null;
+  content_fingerprint?: string | null;
+  raw_payload?: unknown;
+  sources?: { kind?: string | null; label?: string | null } | null;
+};
+
+/** Cluster de texto idêntico propagado no período — ver `levantarSinaisCoordenados`. */
+type SinalCoordenado = {
+  texto: string;
+  repeticoes: number;
+  grupos_distintos: number;
+  janela_horas: number;
+  primeira_aparicao: string;
+  ultima_aparicao: string;
+  densidade_propagacao: number;
+};
+
+// Limiares de coordenação. Nenhum é arbitrário — saem da medição na org piloto (14.360 mensagens,
+// 8.697 clusters únicos), onde três padrões distintos convivem no mesmo corpus:
+//   • 18× em 14 grupos em 2,8h  → disparo coordenado (link de portal, vídeo de vereador)
+//   • 29× em  2 grupos em 432h  → rotina de bom-dia, ruído
+//   • 23× em  6 grupos em 420h  → spam comercial recorrente
+// Repetição sozinha NÃO separa os três — os dois primeiros números são parecidos. O que separa é
+// a DENSIDADE: muitos grupos distintos em pouco tempo. Daí os cortes abaixo.
+const MIN_REPETICOES = 5; // abaixo disso é coincidência/conversa, não propagação
+const MIN_GRUPOS = 3; // 2 grupos é vizinho encaminhando pro vizinho; 3+ já é rede
+const MAX_JANELA_HORAS = 24; // o que se espalha por semanas é rotina/spam, não operação
+const TOP_SINAIS = 8; // é bloco de destaque no prompt, não inventário
+
+/**
+ * Levanta os textos que se propagaram por vários grupos em pouco tempo.
+ *
+ * Passe próprio, deliberadamente separado do pool de amostras: amostra é limitada a 600 linhas
+ * ordenadas por risco/recência, e um disparo coordenado pode ser todo de risco baixo (link de
+ * portal, vídeo elogioso) e sumir dessa janela. Aqui o período inteiro entra.
+ *
+ * Só mensagens com `group_id`: propagação entre grupos é o sinal, e notícia/post sem grupo não
+ * tem como participar dele.
+ */
+async function levantarSinaisCoordenados(
+  orgId: string,
+  start: Date,
+  end: Date,
+): Promise<SinalCoordenado[]> {
+  // `string` cru na variável: com literal, o typegen tenta resolver `content_fingerprint` na
+  // definição desatualizada e derruba a query inteira num SelectQueryError.
+  const colsLeves: string = "content_fingerprint, group_id, posted_at";
+  type LinhaLeve = {
+    content_fingerprint: string | null;
+    group_id: string | null;
+    posted_at: string | null;
+  };
+  const linhas = await fetchAllPages<LinhaLeve>((from, to) =>
+    supabaseAdmin
+      .from("raw_messages")
+      .select(colsLeves)
+      .eq("org_id", orgId)
+      .gte("posted_at", start.toISOString())
+      .lte("posted_at", end.toISOString())
+      .not("content_fingerprint", "is", null)
+      .not("group_id", "is", null)
+      .order("id", { ascending: true }) // ordem estável — sem isso a paginação repete/pula linhas
+      .range(from, to)
+      .returns<LinhaLeve[]>(),
+  );
+
+  const clusters = new Map<string, { total: number; grupos: Set<string>; ts: number[] }>();
+  for (const l of linhas) {
+    const fp = l.content_fingerprint;
+    if (!fp) continue;
+    const c = clusters.get(fp) ?? { total: 0, grupos: new Set<string>(), ts: [] };
+    c.total += 1;
+    if (l.group_id) c.grupos.add(l.group_id);
+    const t = l.posted_at ? Date.parse(l.posted_at) : NaN;
+    if (Number.isFinite(t)) c.ts.push(t);
+    clusters.set(fp, c);
+  }
+
+  const candidatos = [...clusters.entries()]
+    .map(([fp, c]) => {
+      const primeiro = Math.min(...c.ts);
+      const ultimo = Math.max(...c.ts);
+      const janela = c.ts.length ? (ultimo - primeiro) / 3600_000 : 0;
+      return { fp, c, janela, primeiro, ultimo };
+    })
+    .filter(
+      (x) =>
+        x.c.total >= MIN_REPETICOES &&
+        x.c.grupos.size >= MIN_GRUPOS &&
+        x.janela <= MAX_JANELA_HORAS,
+    )
+    // Piso de meia hora na janela: encaminhamento quase simultâneo é o caso MAIS forte, não pode
+    // virar divisão por ~0 e estourar o ranking com base em ruído de timestamp.
+    .map((x) => ({ ...x, densidade: x.c.grupos.size / Math.max(x.janela, 0.5) }))
+    .sort((a, b) => b.densidade - a.densidade)
+    .slice(0, TOP_SINAIS);
+
+  if (candidatos.length === 0) return [];
+
+  // Só agora paga o custo do `content`, e só dos clusters que entraram no top-N.
+  // Uma query por cluster com `limit(1)`, em paralelo, em vez de um `.in()` com teto:
+  // precisamos de UM representante por fingerprint, e um `.limit(N)` global sobre todas as
+  // cópias seria justamente o truncamento silencioso que este projeto acabou de varrer —
+  // se os clusters do topo somassem mais que o teto, algum ficaria sem texto, sem aviso.
+  const colsTexto: string = "content";
+  type LinhaTexto = { content: string | null };
+  const textoPorFp = new Map<string, string>();
+  await Promise.all(
+    candidatos.map(async (x) => {
+      const { data } = await supabaseAdmin
+        .from("raw_messages")
+        .select(colsTexto)
+        .eq("org_id", orgId)
+        // `.filter()` e não `.eq()`: o typegen ainda não conhece `content_fingerprint`
+        // (coluna gerada na migração `message_dedup_fingerprint`) e `.eq()` só aceita
+        // nome de coluna já tipado. `types.ts` é auto-gerado — não se edita.
+        .filter("content_fingerprint", "eq", x.fp)
+        .order("posted_at", { ascending: true }) // o representante é a PRIMEIRA aparição
+        .limit(1)
+        .returns<LinhaTexto[]>();
+      const conteudo = data?.[0]?.content;
+      if (conteudo) textoPorFp.set(x.fp, String(conteudo));
+    }),
+  );
+
+  return candidatos.map((x) => ({
+    texto: (textoPorFp.get(x.fp) ?? "").slice(0, 320),
+    repeticoes: x.c.total,
+    grupos_distintos: x.c.grupos.size,
+    janela_horas: +x.janela.toFixed(1),
+    primeira_aparicao: new Date(x.primeiro).toISOString(),
+    ultima_aparicao: new Date(x.ultimo).toISOString(),
+    densidade_propagacao: +x.densidade.toFixed(2),
+  }));
+}
+
 function periodFor(kind: Kind, now = new Date()): { start: Date; end: Date; title: string } {
   const end = now;
   if (kind === "daily") {
@@ -76,73 +225,116 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
   //  • AMOSTRAS (limitado) → só ele carrega o texto das mensagens, que alimenta as citações
   //    e o prompt. Não faz sentido (nem cabe) mandar o período inteiro para a IA.
   const SAMPLE_LIMIT = 300;
-  const sampleCols =
-    "message_id, topic, neighborhood, sentiment, risk_score, raw_messages!inner(content, posted_at, raw_payload, sources!inner(kind, label))";
-  const [{ data: org }, analyses, alerts, { data: vocab }, { data: signals }, byRisk, byRecent] =
-    await Promise.all([
-      supabaseAdmin.from("organizations").select("name, city").eq("id", orgId).maybeSingle(),
-      fetchAllPages((from, to) =>
-        supabaseAdmin
-          .from("message_analyses")
-          .select(
-            "topic, neighborhood, sentiment, risk_score, mentioned_opponents, raw_messages!inner(posted_at, sources!inner(kind))",
-          )
-          .eq("org_id", orgId)
-          .gte("raw_messages.posted_at", start.toISOString())
-          .lte("raw_messages.posted_at", end.toISOString())
-          .order("id", { ascending: true }) // ordem estável: sem isso a paginação repete/pula linhas
-          .range(from, to),
-      ),
-      fetchAllPages((from, to) =>
-        supabaseAdmin
-          .from("alerts")
-          .select("level, topic, neighborhood, summary, created_at")
-          .eq("org_id", orgId)
-          .gte("created_at", start.toISOString())
-          .lte("created_at", end.toISOString())
-          .order("created_at", { ascending: false })
-          .range(from, to),
-      ),
-      supabaseAdmin.from("org_vocabulary").select("kind, value").eq("org_id", orgId),
+  // `string` cru: `content_fingerprint` ainda não existe nos tipos gerados (ver AmostraBruta).
+  const sampleCols: string =
+    "message_id, topic, neighborhood, sentiment, risk_score, raw_messages!inner(content, posted_at, group_id, content_fingerprint, raw_payload, sources!inner(kind, label))";
+  const [
+    { data: org },
+    analyses,
+    alerts,
+    { data: vocab },
+    { data: signals },
+    byRisk,
+    byRecent,
+    sinaisCoordenados,
+  ] = await Promise.all([
+    supabaseAdmin.from("organizations").select("name, city").eq("id", orgId).maybeSingle(),
+    fetchAllPages((from, to) =>
       supabaseAdmin
-        .from("raw_messages")
+        .from("message_analyses")
         .select(
-          "id, content, posted_at, raw_payload, sources!inner(kind, label), analysis:message_analyses(topic, neighborhood, sentiment, risk_score, summary)",
+          "topic, neighborhood, sentiment, risk_score, mentioned_opponents, raw_messages!inner(posted_at, sources!inner(kind))",
         )
         .eq("org_id", orgId)
-        .gte("posted_at", start.toISOString())
-        .lte("posted_at", end.toISOString())
-        .in("sources.kind", ["news", "instagram", "facebook", "x", "whatsapp"])
-        .order("posted_at", { ascending: false })
-        .limit(500),
-      // Amostras por RISCO (o que importa) …
-      supabaseAdmin
-        .from("message_analyses")
-        .select(sampleCols)
-        .eq("org_id", orgId)
         .gte("raw_messages.posted_at", start.toISOString())
         .lte("raw_messages.posted_at", end.toISOString())
-        .order("risk_score", { ascending: false })
-        .limit(SAMPLE_LIMIT),
-      // … e por RECÊNCIA, para temas positivos/tranquilos também renderem citação.
+        .order("id", { ascending: true }) // ordem estável: sem isso a paginação repete/pula linhas
+        .range(from, to),
+    ),
+    fetchAllPages((from, to) =>
       supabaseAdmin
-        .from("message_analyses")
-        .select(sampleCols)
+        .from("alerts")
+        .select("level, topic, neighborhood, summary, created_at")
         .eq("org_id", orgId)
-        .gte("raw_messages.posted_at", start.toISOString())
-        .lte("raw_messages.posted_at", end.toISOString())
+        .gte("created_at", start.toISOString())
+        .lte("created_at", end.toISOString())
         .order("created_at", { ascending: false })
-        .limit(SAMPLE_LIMIT),
-    ]);
+        .range(from, to),
+    ),
+    supabaseAdmin.from("org_vocabulary").select("kind, value").eq("org_id", orgId),
+    supabaseAdmin
+      .from("raw_messages")
+      .select(
+        "id, content, posted_at, raw_payload, sources!inner(kind, label), analysis:message_analyses(topic, neighborhood, sentiment, risk_score, summary)",
+      )
+      .eq("org_id", orgId)
+      .gte("posted_at", start.toISOString())
+      .lte("posted_at", end.toISOString())
+      .in("sources.kind", ["news", "instagram", "facebook", "x", "whatsapp"])
+      .order("posted_at", { ascending: false })
+      .limit(500),
+    // Amostras por RISCO (o que importa) …
+    supabaseAdmin
+      .from("message_analyses")
+      .select(sampleCols)
+      .eq("org_id", orgId)
+      .gte("raw_messages.posted_at", start.toISOString())
+      .lte("raw_messages.posted_at", end.toISOString())
+      .order("risk_score", { ascending: false })
+      .limit(SAMPLE_LIMIT),
+    // … e por RECÊNCIA, para temas positivos/tranquilos também renderem citação.
+    supabaseAdmin
+      .from("message_analyses")
+      .select(sampleCols)
+      .eq("org_id", orgId)
+      .gte("raw_messages.posted_at", start.toISOString())
+      .lte("raw_messages.posted_at", end.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(SAMPLE_LIMIT),
+    // Bloco de sinal próprio: repetição deixa de ser só desperdício de token e vira indício.
+    levantarSinaisCoordenados(orgId, start, end).catch((e) => {
+      console.error(`[report] levantamento de propagação coordenada falhou (org ${orgId}):`, e);
+      return [] as SinalCoordenado[];
+    }),
+  ]);
 
-  // Pool de amostras: risco + recência, deduplicado por mensagem.
-  const seenSample = new Set<string>();
-  const samplePool = [...(byRisk.data ?? []), ...(byRecent.data ?? [])].filter((s) => {
-    const k = String((s as { message_id?: string }).message_id ?? "");
-    if (!k || seenSample.has(k)) return false;
-    seenSample.add(k);
-    return true;
-  });
+  // Pool de amostras: risco + recência, colapsado por CLUSTER de texto (não só por mensagem).
+  // WhatsApp de bairro é máquina de forward: sem isso, ~28% do orçamento de 600 amostras ia
+  // embora repetindo o mesmo encaminhamento, e a IA via menos assunto DIFERENTE. Mensagem curta
+  // não tem fingerprint (o banco deixa NULL de propósito) e conta como cluster próprio.
+  const clustersVistos = new Map<string, { repeticoes: number; grupos: Set<string> }>();
+  const mensagensVistas = new Set<string>();
+  const samplePool: AmostraBruta[] = [];
+  for (const s of [
+    ...((byRisk.data ?? []) as AmostraBruta[]),
+    ...((byRecent.data ?? []) as AmostraBruta[]),
+  ]) {
+    const raw = Array.isArray(s.raw_messages) ? s.raw_messages[0] : s.raw_messages;
+    const messageId = String(s.message_id ?? "");
+    if (!messageId || mensagensVistas.has(messageId)) continue;
+    // Dedup por mensagem ANTES do cluster: as duas queries se sobrepõem, e a mesma linha vindo
+    // por risco e por recência inflaria a multiplicidade sem existir encaminhamento nenhum.
+    mensagensVistas.add(messageId);
+    const chave = raw?.content_fingerprint ? `fp:${raw.content_fingerprint}` : `msg:${messageId}`;
+    const acc = clustersVistos.get(chave);
+    if (acc) {
+      // Já temos um representante do cluster: a cópia só engorda a multiplicidade.
+      acc.repeticoes += 1;
+      if (raw?.group_id) acc.grupos.add(raw.group_id);
+      continue;
+    }
+    clustersVistos.set(chave, {
+      repeticoes: 1,
+      grupos: new Set(raw?.group_id ? [raw.group_id] : []),
+    });
+    samplePool.push({ ...s, __cluster: chave } as AmostraBruta & { __cluster: string });
+  }
+  /** Multiplicidade do cluster DENTRO da amostra (o número do período inteiro está em
+   *  `coordinated_signals`) — vai junto da citação para a IA não tratar forward como fala isolada. */
+  const multiplicidade = (s: AmostraBruta) => {
+    const c = clustersVistos.get((s as { __cluster?: string }).__cluster ?? "");
+    return { repeticoes: c?.repeticoes ?? 1, grupos: c?.grupos.size ?? 0 };
+  };
 
   // Aggregate
   const topicCounts = new Map<
@@ -158,6 +350,8 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
         neighborhood: string | null;
         source: string;
         posted_at: string | null;
+        repeticoes: number;
+        grupos: number;
       }>;
     }
   >();
@@ -177,6 +371,8 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     source: string;
     posted_at: string | null;
     url: string | null;
+    repeticoes: number;
+    grupos: number;
   }> = [];
   // Passe 1 — NÚMEROS sobre o período inteiro (sem texto).
   for (const a of analyses) {
@@ -215,6 +411,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     const sourceKind = raw.sources?.kind ?? "desconhecida";
     const payload = raw.raw_payload as { url?: string; title?: string } | null;
     const t = s.topic ?? "outros";
+    const mult = multiplicidade(s);
     // Só anexa amostra a tema que existe no passe 1 — a contagem vem de lá, nunca daqui.
     const tc = topicCounts.get(t);
     if (tc && tc.samples.length < 5) {
@@ -225,6 +422,8 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
         neighborhood: s.neighborhood ?? null,
         source: sourceKind,
         posted_at: raw.posted_at ?? null,
+        repeticoes: mult.repeticoes,
+        grupos: mult.grupos,
       });
     }
     if ((s.risk_score ?? 0) >= 55) {
@@ -237,6 +436,8 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
         source: sourceKind,
         posted_at: raw.posted_at ?? null,
         url: payload?.url ?? null,
+        repeticoes: mult.repeticoes,
+        grupos: mult.grupos,
       });
     }
   }
@@ -302,6 +503,8 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     city: org?.city,
     period: { start: start.toISOString(), end: end.toISOString(), kind },
     counts: {
+      // Conta TODAS as mensagens do período, encaminhamentos inclusive — o volume real não
+      // diminui porque houve forward. A dedup vale para amostra e sinal, nunca para contagem.
       messages_analyzed: analyses.length,
       alerts: alertsByLevel,
       by_source: bySource,
@@ -312,6 +515,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     sentiment_trend: trend,
     external_signals: externalSignals,
     high_risk_messages: topHighRisk,
+    coordinated_signals: sinaisCoordenados,
     sample_alerts: alerts.slice(0, 20),
   };
 
@@ -371,7 +575,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
         {
           role: "system",
           content:
-            'Você é o analista-chefe de inteligência política de um gabinete municipal brasileiro. Escreve relatórios densos, jornalísticos e acionáveis em português do Brasil, em markdown limpo. Nunca inventa dados — só usa o que está no JSON fornecido. Cita trechos reais entre aspas quando ilustram um ponto. Prefere análise causal ("por que isso está acontecendo") a listas rasas. Sempre conecta sinais entre canais (WhatsApp × Instagram × imprensa) e nomeia bairros, temas e adversários quando presentes no vocabulário. Quando o JSON contém `prior_reports`, você DEVE ler esses relatórios anteriores e dialogar com eles: dizer o que evoluiu, o que se confirmou, o que arrefeceu, quais recomendações passadas foram atendidas ou ignoradas, e quais temas persistem. O relatório novo é um capítulo de uma série, não um documento isolado. Tom: sério, técnico, direto ao ponto — como um briefing de gabinete de campanha profissional.',
+            'Você é o analista-chefe de inteligência política de um gabinete municipal brasileiro. Escreve relatórios densos, jornalísticos e acionáveis em português do Brasil, em markdown limpo. Nunca inventa dados — só usa o que está no JSON fornecido. Cita trechos reais entre aspas quando ilustram um ponto. Prefere análise causal ("por que isso está acontecendo") a listas rasas. Sempre conecta sinais entre canais (WhatsApp × Instagram × imprensa) e nomeia bairros, temas e adversários quando presentes no vocabulário. Quando o JSON contém `prior_reports`, você DEVE ler esses relatórios anteriores e dialogar com eles: dizer o que evoluiu, o que se confirmou, o que arrefeceu, quais recomendações passadas foram atendidas ou ignoradas, e quais temas persistem. O relatório novo é um capítulo de uma série, não um documento isolado. Quando o JSON traz `coordinated_signals`, trate propagação como evidência de primeira ordem: texto idêntico aparecendo em vários grupos distintos em poucas horas é indício de operação organizada, não de conversa espontânea, e merece destaque analítico. Mas o dado mostra PROPAGAÇÃO, não autoria: descreva o padrão e o efeito, e nunca afirme quem coordenou, com que intenção ou a mando de quem — se especular sobre origem, marque explicitamente como hipótese a verificar. Tom: sério, técnico, direto ao ponto — como um briefing de gabinete de campanha profissional.',
         },
         {
           role: "user",
@@ -404,6 +608,9 @@ Análise dos external_signals de maior risco. Para cada um dos 5-8 mais relevant
 
 ## ⚠️ Riscos emergentes (mensagens de maior risco)
 Discuta os 3-5 itens de maior risk_score em high_risk_messages. Cite o texto entre aspas. Explique o vetor: adversário, viralização, tema sensível?
+
+## 📡 Propagação coordenada
+Analise \`coordinated_signals\` — cada item é um texto IDÊNTICO que circulou em vários grupos no período (\`repeticoes\`, \`grupos_distintos\`, \`janela_horas\`). Já vem filtrado: só entram clusters que atingiram muitos grupos em pouco tempo, ou seja, o padrão de disparo, não o de rotina ou spam. Para os 3-5 mais densos, um parágrafo com: a citação real entre aspas, o alcance (quantos grupos, em quantas horas), o tema que o conteúdo empurra e o efeito prático sobre a narrativa local. Regra dura: o dado prova que o conteúdo se espalhou de forma organizada, NÃO prova quem organizou — não atribua autoria nem intenção a ninguém; se levantar hipótese de origem, escreva que é hipótese a verificar. Se o array estiver vazio, diga em 1 linha que nenhum conteúdo atingiu o padrão de propagação coordenada no período e siga.
 
 ## 🎭 Opositores e narrativas
 Se top_opponents tem dados, analise quem está mais ativo, em que tema e qual narrativa está tentando emplacar. Se estiver vazio, diga isso explicitamente.
