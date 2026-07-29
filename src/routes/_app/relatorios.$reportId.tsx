@@ -93,9 +93,7 @@ function Screen() {
         </button>
       </div>
 
-      {!orgId && (
-        <div className="mt-6 text-[13px] text-v2-ink-3">Selecione uma organização.</div>
-      )}
+      {!orgId && <div className="mt-6 text-[13px] text-v2-ink-3">Selecione uma organização.</div>}
       {orgId && isLoading && (
         <div className="mt-6 text-[13px] text-v2-ink-3">Carregando relatório…</div>
       )}
@@ -118,11 +116,7 @@ function Screen() {
   );
 }
 
-function ReportBody({
-  report,
-}: {
-  report: NonNullable<Awaited<ReturnType<typeof getReport>>>;
-}) {
+function ReportBody({ report }: { report: NonNullable<Awaited<ReturnType<typeof getReport>>> }) {
   const kindLabel = KIND_LABEL[report.kind] ?? report.kind;
   const data = (report.data ?? null) as ReportData;
 
