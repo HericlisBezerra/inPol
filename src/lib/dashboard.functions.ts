@@ -121,6 +121,31 @@ export const listAlerts = createServerFn({ method: "GET" })
     return rows ?? [];
   });
 
+/** Busca um alerta pelo id. Existe porque `listAlerts` é limitada a 100 linhas:
+ *  filtrar aquela lista em memória quebrava o link de qualquer alerta mais antigo
+ *  que os 100 mais recentes da org. Mesmo shape de coluna que `listAlerts` para a
+ *  tela de detalhe consumir sem adaptação. */
+export const getAlert = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ orgId: z.string().uuid(), alertId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: alert, error } = await context.supabase
+      .from("alerts")
+      .select(
+        "id, level, topic, neighborhood, summary, recommended_action, evidence_message_ids, acknowledged_at, acknowledged_by, created_at",
+      )
+      .eq("org_id", data.orgId)
+      .eq("id", data.alertId)
+      .maybeSingle();
+    if (error) {
+      console.error("[getAlert]", error);
+      throw new Error("Não foi possível carregar o alerta.");
+    }
+    return alert;
+  });
+
 export const acknowledgeAlert = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>

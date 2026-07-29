@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { listAlerts, acknowledgeAlert } from "@/lib/dashboard.functions";
+import { getAlert, acknowledgeAlert } from "@/lib/dashboard.functions";
 import { resolveAlert } from "@/lib/alerts.functions";
 import { useCurrentOrg } from "@/lib/use-current-org";
 
@@ -13,28 +13,14 @@ export const Route = createFileRoute("/_app/alertas/$alertId")({
 });
 
 /** S4 — Alerta: roteiro de ação + comparativo sem/com inPol.
- * Cabeçalho, badges e ação recomendada vêm de `listAlerts` (não há um `getAlert`
- * dedicado na assinatura autorizada, então buscamos a lista completa da org —
- * incluindo reconhecidos — e filtramos pelo id da rota). Abrir o alerta o
- * reconhece automaticamente (não existe botão "Reconhecer" no design; ver nota
- * abaixo). "Resolver" fica disponível no painel de progresso.
+ * Cabeçalho, badges e ação recomendada vêm de `getAlert` (busca por id no banco).
+ * Abrir o alerta o reconhece automaticamente (não existe botão "Reconhecer" no
+ * design; ver nota abaixo). "Resolver" fica disponível no painel de progresso.
  * O roteiro passo-a-passo, o comparativo sem/com Inpol e as "mensagens-chave"
  * continuam ilustrativos: o backend autorizado não expõe passos de ação
  * granulares nem o conteúdo das mensagens de evidência — apenas
  * `recommended_action` como texto único.
  */
-
-type AlertRow = {
-  id: string;
-  level: string;
-  topic: string;
-  neighborhood: string | null;
-  summary: string | null;
-  recommended_action: string | null;
-  evidence_message_ids: string[] | null;
-  acknowledged_at: string | null;
-  created_at: string;
-};
 
 const TIMELINE_BAD = [
   {
@@ -71,37 +57,47 @@ function AlertaDetalhe() {
   const qc = useQueryClient();
 
   const {
-    data: alerts,
+    data: alert,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["alerts", orgId, "all"],
-    queryFn: () => listAlerts({ data: { orgId: orgId as string, includeAcked: true } }),
+    queryKey: ["alert", orgId, alertId],
+    queryFn: () => getAlert({ data: { orgId: orgId as string, alertId } }),
     enabled: !!orgId,
   });
 
-  const alert = (alerts as AlertRow[] | undefined)?.find((a) => a.id === alertId);
+  // A listagem e o detalhe têm chaves distintas — reconhecer/resolver precisa invalidar as duas.
+  const invalidarAlerta = () => {
+    qc.invalidateQueries({ queryKey: ["alert", orgId, alertId] });
+    qc.invalidateQueries({ queryKey: ["alerts", orgId] });
+  };
 
   const ack = useMutation({
     mutationFn: () => acknowledgeAlert({ data: { orgId: orgId as string, alertId } }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["alerts", orgId] });
-    },
+    onSuccess: invalidarAlerta,
   });
   const resolve = useMutation({
     mutationFn: () => resolveAlert({ data: { alertId } }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["alerts", orgId] });
-    },
+    onSuccess: invalidarAlerta,
   });
 
   // Abrir o alerta reconhece automaticamente — não há botão "Reconhecer" no design.
+  // `isSuccess` no guarda evita disparar de novo na janela entre o ack e o refetch.
   useEffect(() => {
-    if (alert && !alert.acknowledged_at && orgId && !ack.isPending) {
+    if (alert && !alert.acknowledged_at && orgId && !ack.isPending && !ack.isSuccess) {
       ack.mutate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alert?.id, alert?.acknowledged_at, orgId]);
+
+  if (!orgId) {
+    return (
+      <div>
+        <BackLink />
+        <div className="mt-6 text-[13.5px] text-v2-ink-3">Selecione uma organização.</div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

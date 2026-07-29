@@ -17,32 +17,31 @@ export const searchInternal = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const since = new Date(Date.now() - data.days * 86400_000).toISOString();
-    const q = context.supabase
+
+    // Bairro e risco moram em message_analyses. Filtrar no banco exige `!inner` — o que
+    // por si só descarta mensagens ainda não analisadas, exatamente as que os filtros
+    // antigos já derrubavam em JS (`?? 0` / bairro undefined). Sem `!inner`, o limite de 50
+    // seria aplicado ANTES do filtro e a busca devolveria uma amostra, não a resposta.
+    const restrictsByAnalysis = !!data.neighborhood || (data.minRisk ?? 0) > 0;
+    const select = restrictsByAnalysis
+      ? "id, content, posted_at, group:whatsapp_groups(subject, neighborhood_tag), analysis:message_analyses!inner(topic, neighborhood, sentiment, risk_score, summary)"
+      : "id, content, posted_at, group:whatsapp_groups(subject, neighborhood_tag), analysis:message_analyses(topic, neighborhood, sentiment, risk_score, summary)";
+
+    let q = context.supabase
       .from("raw_messages")
-      .select(
-        "id, content, posted_at, group:whatsapp_groups(subject, neighborhood_tag), analysis:message_analyses(topic, neighborhood, sentiment, risk_score, summary)",
-      )
+      .select(select)
       .eq("org_id", data.orgId)
       .gte("posted_at", since)
       .textSearch("content", data.q, { type: "websearch", config: "portuguese" })
       .order("posted_at", { ascending: false })
       .limit(50);
+
+    if (data.neighborhood) q = q.eq("analysis.neighborhood", data.neighborhood);
+    if ((data.minRisk ?? 0) > 0) q = q.gte("analysis.risk_score", data.minRisk!);
+
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    let filtered = rows ?? [];
-    if (data.neighborhood) {
-      filtered = filtered.filter((r) => {
-        const an = Array.isArray(r.analysis) ? r.analysis[0] : r.analysis;
-        return an?.neighborhood === data.neighborhood;
-      });
-    }
-    if (data.minRisk !== undefined) {
-      filtered = filtered.filter((r) => {
-        const an = Array.isArray(r.analysis) ? r.analysis[0] : r.analysis;
-        return (an?.risk_score ?? 0) >= data.minRisk!;
-      });
-    }
-    return filtered;
+    return rows ?? [];
   });
 
 function hostnameOf(url: string): string | undefined {

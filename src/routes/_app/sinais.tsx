@@ -33,6 +33,7 @@ const SOURCE_TAG: Record<string, string> = {
 
 const DEFAULT_LIMIT = 80;
 const LOAD_MORE_STEP = 40;
+const FEED_DAYS = 14;
 
 function riskTone(risk: number): "crit" | "warn" | "green" {
   if (risk >= 70) return "crit";
@@ -70,7 +71,7 @@ function Screen() {
           neighborhood: neighborhood === "all" ? null : neighborhood,
           vocabTerm: vocabTerm === "all" ? null : vocabTerm,
           sentiment: onlyNegative ? "negative" : "all",
-          days: 14,
+          days: FEED_DAYS,
           limit,
         },
       }),
@@ -82,7 +83,10 @@ function Screen() {
   const terms = useMemo(() => vocab.filter((v) => v.kind !== "neighborhood"), [vocab]);
 
   const rows = feed.data ?? [];
+  // Os filtros agora rodam no banco, então a lista vir cheia significa "existe mais lá atrás"
+  // — e não mais "o corte já tinha acontecido antes de filtrar". O "+" torna o número honesto.
   const canLoadMore = rows.length >= limit;
+  const countLabel = feed.isLoading ? "…" : `${rows.length}${canLoadMore ? "+" : ""}`;
 
   if (!orgId) {
     return <div className="p-6 text-[13px] text-v2-ink-3">Selecione uma organização.</div>;
@@ -99,7 +103,7 @@ function Screen() {
           </p>
         </div>
         <span className="font-mono text-[11px] text-v2-green">
-          ● {feed.isLoading ? "…" : rows.length} sinais carregados
+          ● {countLabel} sinais carregados
         </span>
       </div>
 
@@ -156,7 +160,7 @@ function Screen() {
       </div>
 
       <div className="mb-1.5 mt-3.5 font-mono text-[10px] font-semibold tracking-[0.1em] text-v2-faint">
-        HOJE · {feed.isLoading ? "…" : rows.length} {rows.length === 1 ? "SINAL" : "SINAIS"}
+        ÚLTIMOS {FEED_DAYS} DIAS · {countLabel} {rows.length === 1 ? "SINAL" : "SINAIS"}
       </div>
 
       {feed.isError && (
