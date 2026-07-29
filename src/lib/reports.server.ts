@@ -7,6 +7,26 @@ import { buildFallbackReport } from "./report-fallback";
 
 type Kind = "daily" | "weekly" | "monthly";
 
+/** O PostgREST corta TODA resposta em `db-max-rows` (1.000 no Supabase) e ignora
+ *  silenciosamente um `.limit()` maior — então uma única query NUNCA vê o período inteiro.
+ *  Este helper pagina com `.range()` até acabar. Use só com colunas leves: é feito para
+ *  contar/agregar, não para trazer texto de mensagem. */
+const PAGE = 1000;
+const MAX_ROWS = 60_000; // trava de segurança (mensal cabe folgado)
+async function fetchAllPages<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; from < MAX_ROWS; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1);
+    if (error) throw new Error(String((error as { message?: string })?.message ?? error));
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 function periodFor(kind: Kind, now = new Date()): { start: Date; end: Date; title: string } {
   const end = now;
   if (kind === "daily") {
@@ -69,24 +89,39 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
           .order("generated_at", { ascending: false })
           .limit(2);
 
-  const [{ data: org }, { data: analyses }, { data: alerts }, { data: vocab }, { data: signals }] =
+  // Dois passes deliberadamente separados:
+  //  • LEVE (paginado, período INTEIRO) → todos os números: contagens, tendência, bairros,
+  //    opositores, fontes. Sem `content`, que é o que pesa.
+  //  • AMOSTRAS (limitado) → só ele carrega o texto das mensagens, que alimenta as citações
+  //    e o prompt. Não faz sentido (nem cabe) mandar o período inteiro para a IA.
+  const SAMPLE_LIMIT = 300;
+  const sampleCols =
+    "message_id, topic, neighborhood, sentiment, risk_score, raw_messages!inner(content, posted_at, raw_payload, sources!inner(kind, label))";
+  const [{ data: org }, analyses, alerts, { data: vocab }, { data: signals }, byRisk, byRecent] =
     await Promise.all([
       supabaseAdmin.from("organizations").select("name, city").eq("id", orgId).maybeSingle(),
-      supabaseAdmin
-        .from("message_analyses")
-        .select(
-          "topic, neighborhood, sentiment, risk_score, summary, mentioned_opponents, raw_messages!inner(id, content, posted_at, raw_payload, sources!inner(kind, label))",
-        )
-        .eq("org_id", orgId)
-        .gte("raw_messages.posted_at", start.toISOString())
-        .lte("raw_messages.posted_at", end.toISOString())
-        .limit(2000),
-      supabaseAdmin
-        .from("alerts")
-        .select("level, topic, neighborhood, summary, created_at")
-        .eq("org_id", orgId)
-        .gte("created_at", start.toISOString())
-        .lte("created_at", end.toISOString()),
+      fetchAllPages((from, to) =>
+        supabaseAdmin
+          .from("message_analyses")
+          .select(
+            "topic, neighborhood, sentiment, risk_score, mentioned_opponents, raw_messages!inner(posted_at, sources!inner(kind))",
+          )
+          .eq("org_id", orgId)
+          .gte("raw_messages.posted_at", start.toISOString())
+          .lte("raw_messages.posted_at", end.toISOString())
+          .order("id", { ascending: true }) // ordem estável: sem isso a paginação repete/pula linhas
+          .range(from, to),
+      ),
+      fetchAllPages((from, to) =>
+        supabaseAdmin
+          .from("alerts")
+          .select("level, topic, neighborhood, summary, created_at")
+          .eq("org_id", orgId)
+          .gte("created_at", start.toISOString())
+          .lte("created_at", end.toISOString())
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      ),
       supabaseAdmin.from("org_vocabulary").select("kind, value").eq("org_id", orgId),
       supabaseAdmin
         .from("raw_messages")
@@ -99,7 +134,34 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
         .in("sources.kind", ["news", "instagram", "facebook", "x", "whatsapp"])
         .order("posted_at", { ascending: false })
         .limit(500),
+      // Amostras por RISCO (o que importa) …
+      supabaseAdmin
+        .from("message_analyses")
+        .select(sampleCols)
+        .eq("org_id", orgId)
+        .gte("raw_messages.posted_at", start.toISOString())
+        .lte("raw_messages.posted_at", end.toISOString())
+        .order("risk_score", { ascending: false })
+        .limit(SAMPLE_LIMIT),
+      // … e por RECÊNCIA, para temas positivos/tranquilos também renderem citação.
+      supabaseAdmin
+        .from("message_analyses")
+        .select(sampleCols)
+        .eq("org_id", orgId)
+        .gte("raw_messages.posted_at", start.toISOString())
+        .lte("raw_messages.posted_at", end.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(SAMPLE_LIMIT),
     ]);
+
+  // Pool de amostras: risco + recência, deduplicado por mensagem.
+  const seenSample = new Set<string>();
+  const samplePool = [...(byRisk.data ?? []), ...(byRecent.data ?? [])].filter((s) => {
+    const k = String((s as { message_id?: string }).message_id ?? "");
+    if (!k || seenSample.has(k)) return false;
+    seenSample.add(k);
+    return true;
+  });
 
   // Aggregate
   const topicCounts = new Map<
@@ -135,10 +197,10 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     posted_at: string | null;
     url: string | null;
   }> = [];
-  for (const a of analyses ?? []) {
+  // Passe 1 — NÚMEROS sobre o período inteiro (sem texto).
+  for (const a of analyses) {
     const raw = Array.isArray(a.raw_messages) ? a.raw_messages[0] : a.raw_messages;
     const sourceKind = raw?.sources?.kind ?? "desconhecida";
-    const payload = raw?.raw_payload as { url?: string; title?: string } | null;
     const day = raw?.posted_at ? String(raw.posted_at).slice(5, 10) : "sem data";
     sourceCounts.set(sourceKind, (sourceCounts.get(sourceKind) ?? 0) + 1);
     const dayEntry = sentimentTrend.get(day) ?? { count: 0, sentSum: 0 };
@@ -150,16 +212,6 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     tc.count += 1;
     tc.sentSum += Number(a.sentiment ?? 0);
     tc.maxRisk = Math.max(tc.maxRisk, a.risk_score ?? 0);
-    if (tc.samples.length < 5 && raw?.content) {
-      tc.samples.push({
-        text: String(raw.content).slice(0, 260),
-        sentiment: Number(a.sentiment ?? 0),
-        risk: a.risk_score ?? 0,
-        neighborhood: a.neighborhood ?? null,
-        source: sourceKind,
-        posted_at: raw.posted_at ?? null,
-      });
-    }
     topicCounts.set(t, tc);
     if (a.neighborhood) {
       const nc = neighSent.get(a.neighborhood) ?? {
@@ -173,13 +225,34 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
       neighSent.set(a.neighborhood, nc);
     }
     for (const o of a.mentioned_opponents ?? []) oppCounts.set(o, (oppCounts.get(o) ?? 0) + 1);
-    if ((a.risk_score ?? 0) >= 55 && raw?.content) {
+  }
+
+  // Passe 2 — TEXTO: citações por tema e mensagens de alto risco, do pool amostrado.
+  for (const s of samplePool) {
+    const raw = Array.isArray(s.raw_messages) ? s.raw_messages[0] : s.raw_messages;
+    if (!raw?.content) continue;
+    const sourceKind = raw.sources?.kind ?? "desconhecida";
+    const payload = raw.raw_payload as { url?: string; title?: string } | null;
+    const t = s.topic ?? "outros";
+    // Só anexa amostra a tema que existe no passe 1 — a contagem vem de lá, nunca daqui.
+    const tc = topicCounts.get(t);
+    if (tc && tc.samples.length < 5) {
+      tc.samples.push({
+        text: String(raw.content).slice(0, 260),
+        sentiment: Number(s.sentiment ?? 0),
+        risk: s.risk_score ?? 0,
+        neighborhood: s.neighborhood ?? null,
+        source: sourceKind,
+        posted_at: raw.posted_at ?? null,
+      });
+    }
+    if ((s.risk_score ?? 0) >= 55) {
       highRiskMessages.push({
         text: String(raw.content).slice(0, 320),
-        risk: a.risk_score ?? 0,
-        sentiment: Number(a.sentiment ?? 0),
+        risk: s.risk_score ?? 0,
+        sentiment: Number(s.sentiment ?? 0),
         topic: t,
-        neighborhood: a.neighborhood ?? null,
+        neighborhood: s.neighborhood ?? null,
         source: sourceKind,
         posted_at: raw.posted_at ?? null,
         url: payload?.url ?? null,
@@ -238,9 +311,9 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
   const topExternalForPrompt = externalSignals.slice(0, 25);
   const topHighRisk = highRiskMessages.sort((a, b) => b.risk - a.risk).slice(0, 15);
   const alertsByLevel = {
-    vermelho: (alerts ?? []).filter((a) => a.level === "vermelho").length,
-    laranja: (alerts ?? []).filter((a) => a.level === "laranja").length,
-    amarelo: (alerts ?? []).filter((a) => a.level === "amarelo").length,
+    vermelho: alerts.filter((a) => a.level === "vermelho").length,
+    laranja: alerts.filter((a) => a.level === "laranja").length,
+    amarelo: alerts.filter((a) => a.level === "amarelo").length,
   };
 
   const dataBlock = {
@@ -248,7 +321,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     city: org?.city,
     period: { start: start.toISOString(), end: end.toISOString(), kind },
     counts: {
-      messages_analyzed: analyses?.length ?? 0,
+      messages_analyzed: analyses.length,
       alerts: alertsByLevel,
       by_source: bySource,
     },
@@ -258,7 +331,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
     sentiment_trend: trend,
     external_signals: externalSignals,
     high_risk_messages: topHighRisk,
-    sample_alerts: (alerts ?? []).slice(0, 20),
+    sample_alerts: alerts.slice(0, 20),
   };
 
   // Prior reports as narrative context (truncated to keep tokens sane)
@@ -289,7 +362,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
   const promptData = {
     ...dataBlock,
     external_signals: topExternalForPrompt,
-    sample_alerts: (alerts ?? []).slice(0, 12),
+    sample_alerts: alerts.slice(0, 12),
     prior_reports: priorReports,
   };
 
