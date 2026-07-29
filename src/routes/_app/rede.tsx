@@ -13,7 +13,7 @@ import { listPeople } from "@/lib/people.functions";
 import { listVocabulary } from "@/lib/vocabulary.functions";
 import { fetchAllPages } from "@/lib/pg-paginate";
 import { PersonSheet } from "@/components/v2/person-sheet";
-import { STANCE_TONE, initialsOfName } from "@/components/v2/person-shared";
+import { STANCE_TONE, STANCES, initialsOfName, type Stance } from "@/components/v2/person-shared";
 
 export const Route = createFileRoute("/_app/rede")({
   head: () => ({ meta: [{ title: "Rede — Inpol v2" }] }),
@@ -21,18 +21,18 @@ export const Route = createFileRoute("/_app/rede")({
 });
 
 /**
- * S9 + S23 + S10 — Rede consolidada: Adversários / Pessoas / Grupos em abas.
+ * S9 + S23 + S10 — Rede consolidada: Pessoas / Grupos em abas.
  *
- * As abas Adversários e Pessoas agora leem a MESMA fonte — `org_people` via listPeople —
- * porque adversário e pessoa monitorada deixaram de ser tabelas diferentes: são a mesma
- * ficha com `stance` diferente. Antes, mudar alguém de lado exigia recadastrar; e o @ do
- * Instagram, o WhatsApp e o nome que a IA reconhece ficavam em três telas separadas.
- * Clicar em qualquer linha/card abre a ficha única (PersonSheet), onde tudo é editado.
+ * Adversário e pessoa monitorada deixaram de ser tabelas diferentes: são a mesma ficha
+ * (`org_people`) com `stance` diferente. Enquanto havia duas abas lendo a mesma fonte, o
+ * usuário via a mesma gente duas vezes e a promessa de "um lugar só" não se sustentava —
+ * por isso agora existe UMA lista de pessoas, e o posicionamento virou filtro dentro dela.
+ * Clicar em qualquer linha abre a ficha única (PersonSheet), onde tudo é editado.
  *
  * Métricas que o schema não modela (ex.: MSGS 7D por grupo) ficam em estado vazio
  * honesto — nunca inventadas.
  */
-type TabId = "adversarios" | "pessoas" | "grupos";
+type TabId = "pessoas" | "grupos";
 
 /** Linha de `org_people` (contrato de people.functions). */
 type PersonRow = {
@@ -59,7 +59,7 @@ type PersonRow = {
 
 function Screen() {
   const { orgId } = useCurrentOrg();
-  const [tab, setTab] = useState<TabId>("adversarios");
+  const [tab, setTab] = useState<TabId>("pessoas");
   // `undefined` = ficha fechada; `null` = ficha em modo criação; string = editando.
   const [sheetId, setSheetId] = useState<string | null | undefined>(undefined);
 
@@ -91,10 +91,7 @@ function Screen() {
   });
   const fontesCount = vocab.filter((v) => v.kind === "news_domain").length;
 
-  const adversaries = useMemo(() => people.filter((p) => p.stance === "adversario"), [people]);
-
   const TABS: { id: TabId; label: string; count: number | null }[] = [
-    { id: "adversarios", label: "⚔ Adversários", count: peopleLoading ? null : adversaries.length },
     { id: "pessoas", label: "👤 Pessoas", count: peopleLoading ? null : people.length },
     { id: "grupos", label: "💬 Grupos", count: groupsCount ?? null },
   ];
@@ -152,15 +149,6 @@ function Screen() {
         </Link>
       </div>
 
-      {tab === "adversarios" && (
-        <TabAdversarios
-          orgId={orgId}
-          adversaries={adversaries}
-          isLoading={peopleLoading}
-          isError={peopleError}
-          onOpen={setSheetId}
-        />
-      )}
       {tab === "pessoas" && (
         <TabPessoas
           orgId={orgId}
@@ -179,7 +167,7 @@ function Screen() {
   );
 }
 
-/* ─────────────────────────── Aba Adversários (S9) ─────────────────────────── */
+/* ─────────────────── Aba Pessoas (S9 + S23, unificadas) ─────────────────── */
 
 /** Sinais legados que ainda vivem em `org_adversaries` e não migraram para org_people. */
 type AdvSignals = {
@@ -206,19 +194,52 @@ const KIND_LABEL: Record<IgTarget["kind"], string> = {
   other: "Outro",
 };
 
-function TabAdversarios({
+type MemberStat = {
+  member_id: string;
+  message_count: number | null;
+  avg_sentiment: number | null;
+};
+
+/** Uma pessoa já resolvida com todos os sinais cruzados — o que a linha precisa desenhar. */
+type PersonView = {
+  person: PersonRow;
+  /** `null` = a pessoa não tem linha em org_adversaries (dado inexistente, não zero). */
+  score: number | null;
+  tags: string[];
+  plays: { when: string; text: string }[];
+  /** `null` = nenhum tracked_member vinculado, então não há o que medir. */
+  msgs: number | null;
+  sentiment: number | null;
+};
+
+/**
+ * Grade única para o cabeçalho e para as linhas. Duplicar a string em dois lugares foi
+ * o que já desalinhou a tabela antes — mexer aqui move as duas.
+ */
+const ROW_GRID =
+  "grid grid-cols-[24px_1.8fr_0.8fr_1.1fr_0.9fr_1.05fr_0.65fr_0.95fr_0.7fr] items-center gap-3";
+
+type StanceFilter = "todos" | Stance;
+
+function TabPessoas({
   orgId,
-  adversaries,
+  people,
   isLoading,
   isError,
   onOpen,
 }: {
   orgId: string;
-  adversaries: PersonRow[];
+  people: PersonRow[];
   isLoading: boolean;
   isError: boolean;
   onOpen: (id: string) => void;
 }) {
+  const [search, setSearch] = useState("");
+  const [stance, setStance] = useState<StanceFilter>("todos");
+  // Só uma linha expandida por vez: as "últimas jogadas" são leitura de contexto, não
+  // comparação lado a lado — e manter várias abertas destrói a densidade da tabela.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   // Score de atividade e "últimas jogadas" continuam em org_adversaries (a migração foi
   // aditiva). Cruzamos por person_id para não perder esses sinais enquanto não migram.
   const { data: signals = [] } = useQuery({
@@ -237,13 +258,42 @@ function TabAdversarios({
     },
   });
 
-  const signalByPerson = useMemo(() => {
-    const map = new Map<string, AdvSignals>();
-    signals.forEach((s) => {
-      if (s.person_id) map.set(s.person_id, s);
-    });
-    return map;
-  }, [signals]);
+  // Volume/sentimento ainda são medidos por `tracked_members.id` (member_daily_stats não
+  // conhece person_id). Este mapa member→person é a ponte enquanto as stats não migram.
+  const { data: memberLinks = [] } = useQuery({
+    queryKey: ["tracked-members-person-map", orgId],
+    queryFn: async () => {
+      // `const string` pelo mesmo motivo do bloco de sinais acima: `person_id` ainda não
+      // está no typegen.
+      const cols: string = "id, person_id";
+      const { data } = await supabase
+        .from("tracked_members")
+        .select(cols)
+        .eq("org_id", orgId)
+        .returns<{ id: string; person_id: string | null }[]>();
+      return data ?? [];
+    },
+  });
+
+  const { data: stats = [] } = useQuery({
+    queryKey: ["member-stats-30d", orgId],
+    queryFn: () => {
+      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      // Paginado porque estas linhas são AGREGADAS abaixo (msgs 30d e sentimento médio por
+      // pessoa): a tabela tem uma linha por pessoa POR DIA, então ~34 pessoas monitoradas já
+      // estouram as 1.000 do PostgREST — e o corte não dá erro, só faz as últimas pessoas da
+      // lista aparecerem com "0 msgs / sem dados".
+      return fetchAllPages<MemberStat>((from, to) =>
+        supabase
+          .from("member_daily_stats")
+          .select("member_id, message_count, avg_sentiment")
+          .eq("org_id", orgId)
+          .gte("bucket_date", cutoff)
+          .order("id", { ascending: true }) // ordem estável: sem isso a paginação repete/pula linhas
+          .range(from, to),
+      );
+    },
+  });
 
   const { data: igTargets = [], isLoading: igLoading } = useQuery({
     queryKey: ["ig-targets", orgId],
@@ -258,69 +308,228 @@ function TabAdversarios({
     },
   });
 
-  const ordered = useMemo(
-    () =>
-      [...adversaries].sort(
-        (a, b) =>
-          (signalByPerson.get(b.id)?.activity_score ?? 0) -
-            (signalByPerson.get(a.id)?.activity_score ?? 0) ||
-          a.display_name.localeCompare(b.display_name, "pt-BR"),
-      ),
-    [adversaries, signalByPerson],
-  );
+  /**
+   * Cruza pessoa × sinais × estatísticas uma vez só. A distinção entre "sem vínculo"
+   * (null) e "zero mensagens" (0) é o ponto: mostrar 0 para quem nunca foi vinculado a um
+   * tracked_member faria o gabinete concluir "essa pessoa está quieta" quando na verdade
+   * ninguém está ouvindo.
+   */
+  const views = useMemo<PersonView[]>(() => {
+    const signalByPerson = new Map<string, AdvSignals>();
+    signals.forEach((s) => {
+      if (s.person_id) signalByPerson.set(s.person_id, s);
+    });
 
-  const top = ordered[0];
-  const topScore = top ? (signalByPerson.get(top.id)?.activity_score ?? 0) : 0;
+    const memberToPerson = new Map<string, string>();
+    const measurable = new Set<string>();
+    memberLinks.forEach((m) => {
+      if (!m.person_id) return;
+      memberToPerson.set(m.id, m.person_id);
+      measurable.add(m.person_id);
+    });
+
+    const agg = new Map<string, { msgs: number; sent: number; sentN: number }>();
+    stats.forEach((s) => {
+      const personId = memberToPerson.get(s.member_id);
+      if (!personId) return;
+      const a = agg.get(personId) ?? { msgs: 0, sent: 0, sentN: 0 };
+      a.msgs += s.message_count ?? 0;
+      if (s.avg_sentiment != null) {
+        a.sent += Number(s.avg_sentiment);
+        a.sentN++;
+      }
+      agg.set(personId, a);
+    });
+
+    return people.map((p) => {
+      const sig = signalByPerson.get(p.id);
+      const a = agg.get(p.id);
+      const recent = sig?.recent_actions;
+      return {
+        person: p,
+        score: sig ? (sig.activity_score ?? 0) : null,
+        // top_topics (curadoria da IA sobre o adversário) tem prioridade sobre as tags
+        // manuais da ficha; quem não tem sinal cai nas tags e segue mostrando algo.
+        tags: Array.isArray(sig?.top_topics) ? (sig.top_topics as string[]) : p.tags,
+        plays: Array.isArray(recent)
+          ? (recent as { date: string; action: string }[]).map((x) => ({
+              when: x.date,
+              text: x.action,
+            }))
+          : [],
+        msgs: measurable.has(p.id) ? (a?.msgs ?? 0) : null,
+        sentiment: a && a.sentN > 0 ? a.sent / a.sentN : null,
+      };
+    });
+  }, [people, signals, memberLinks, stats]);
+
+  /** Busca aplicada ANTES do posicionamento, para que as contagens dos chips já reflitam
+   *  o termo digitado — chip prometendo 4 e entregando 0 é pior que chip zerado. */
+  const searched = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return views;
+    return views.filter(({ person: p, tags }) => {
+      return (
+        p.display_name.toLowerCase().includes(q) ||
+        (p.role ?? "").toLowerCase().includes(q) ||
+        (p.party ?? "").toLowerCase().includes(q) ||
+        (p.neighborhood ?? "").toLowerCase().includes(q) ||
+        (p.department_name ?? "").toLowerCase().includes(q) ||
+        (p.instagram_handle ?? "").toLowerCase().includes(q) ||
+        tags.some((t) => t.toLowerCase().includes(q))
+      );
+    });
+  }, [views, search]);
+
+  const counts = useMemo(() => {
+    const byStance = { adversario: 0, aliado: 0, neutro: 0, interno: 0 } as Record<Stance, number>;
+    searched.forEach((v) => byStance[v.person.stance]++);
+    return byStance;
+  }, [searched]);
+
+  const ordered = useMemo(() => {
+    const rows = stance === "todos" ? searched : searched.filter((v) => v.person.stance === stance);
+    // Quem tem sinal de atividade sobe: numa org com centenas de fichas, o que importa
+    // primeiro é quem se mexeu. Empate cai no volume medido e, por fim, no alfabeto.
+    return [...rows].sort(
+      (a, b) =>
+        (b.score ?? -1) - (a.score ?? -1) ||
+        (b.msgs ?? -1) - (a.msgs ?? -1) ||
+        a.person.display_name.localeCompare(b.person.display_name, "pt-BR"),
+    );
+  }, [searched, stance]);
+
+  const topActive = ordered.find((v) => (v.score ?? 0) > 0) ?? null;
+  const topByMsgs = useMemo(() => {
+    let best: PersonView | null = null;
+    views.forEach((v) => {
+      if ((v.msgs ?? 0) > 0 && (!best || (v.msgs ?? 0) > (best.msgs ?? 0))) best = v;
+    });
+    return best as PersonView | null;
+  }, [views]);
+
+  const CHIPS: { value: StanceFilter; label: string; count: number }[] = [
+    { value: "todos", label: "Todos", count: searched.length },
+    ...STANCES.map((s) => ({
+      value: s.value as StanceFilter,
+      label: `${s.label}s`,
+      count: counts[s.value],
+    })),
+  ];
 
   return (
     <div>
-      {isError && (
-        <div className="mb-3 text-[12.5px] text-v2-crit">
-          Não foi possível carregar os adversários. Tente novamente.
+      {/* Toolbar: busca + posicionamento como segmented control (o antigo <select> escondia
+          as contagens, que são justamente o que responde "quem eu tenho mapeado"). */}
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
+        <div className="flex w-[280px] items-center gap-2 rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[13px] text-v2-ink-3">
+          ⌕
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, cargo, bairro, tag…"
+            aria-label="Buscar pessoa"
+            className="w-full bg-transparent text-[13px] text-v2-ink outline-none placeholder:text-v2-ink-3"
+          />
         </div>
-      )}
-
-      {isLoading && <div className="text-[12.5px] text-v2-ink-3">Carregando…</div>}
-
-      {!isLoading && !isError && ordered.length === 0 && (
-        <div className="rounded-[13px] border border-v2-line bg-v2-card px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
-          Nenhum adversário cadastrado. Use “＋ Adicionar pessoa” e marque o posicionamento como
-          Adversário.
-        </div>
-      )}
-
-      {ordered.length > 0 && (
-        <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
-          {ordered.map((p) => {
-            const sig = signalByPerson.get(p.id);
-            const score = sig?.activity_score ?? 0;
-            const topTopics = sig?.top_topics;
-            const recentActions = sig?.recent_actions;
-            const tags = Array.isArray(topTopics) ? (topTopics as string[]) : p.tags;
-            const plays = Array.isArray(recentActions)
-              ? (recentActions as { date: string; action: string }[]).map((x) => ({
-                  when: x.date,
-                  text: x.action,
-                }))
-              : [];
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="group"
+          aria-label="Filtrar por posicionamento"
+        >
+          {CHIPS.map((c) => {
+            const active = stance === c.value;
+            const tone = c.value === "todos" ? null : STANCE_TONE[c.value];
             return (
-              <AdversaryCard
-                key={p.id}
-                person={p}
-                score={score}
-                tags={tags}
-                plays={plays}
-                onOpen={() => onOpen(p.id)}
-              />
+              <button
+                key={c.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setStance(c.value)}
+                className={`rounded-full px-3 py-[7px] text-[12.5px] transition-colors ${
+                  active
+                    ? `font-[650] ${tone ? tone.chip : "bg-v2-track text-v2-ink"}`
+                    : "border border-v2-line bg-v2-card font-semibold text-v2-ink-3 hover:border-v2-line-strong"
+                }`}
+              >
+                {c.label} <span className="font-mono text-[11px] opacity-70">{c.count}</span>
+              </button>
             );
           })}
         </div>
+        <div className="flex-1" />
+        <span className="font-mono text-[11px] text-v2-ink-3">
+          {ordered.length} de {people.length}
+        </span>
+      </div>
+
+      {isError && (
+        <div className="mb-3 text-[12.5px] text-v2-crit">
+          Não foi possível carregar as pessoas. Tente novamente.
+        </div>
       )}
 
-      {top && topScore > 0 && (
+      {/* Tabela — escolhida em vez de cards porque a lista é comparativa (quem está sendo
+          ouvido? quem se mexeu?) e precisa aguentar centenas de linhas sem virar rolagem
+          infinita. O que era exclusivo dos cards (tópicos e jogadas) vive no expandir. */}
+      <div className="overflow-hidden rounded-[13px] border border-v2-line bg-v2-card">
+        <div
+          className={`${ROW_GRID} border-b border-v2-line px-5 py-[11px] font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint`}
+        >
+          <span aria-hidden />
+          <span>NOME</span>
+          <span>POSIÇÃO</span>
+          <span>CARGO / SECRETARIA</span>
+          <span>BAIRRO</span>
+          <span>MONITORAMENTO</span>
+          <span>MSGS 30D</span>
+          <span>SENTIMENTO</span>
+          <span className="text-right">ATIVIDADE</span>
+        </div>
+
+        {isLoading && <div className="px-5 py-3.5 text-[12.5px] text-v2-ink-3">Carregando…</div>}
+
+        {!isLoading && !isError && people.length === 0 && (
+          <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
+            Nenhuma pessoa cadastrada. Use “＋ Adicionar pessoa” para mapear adversários, aliados e
+            lideranças no mesmo lugar.
+          </div>
+        )}
+
+        {!isLoading && people.length > 0 && ordered.length === 0 && (
+          <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
+            {stance === "todos"
+              ? "Nenhuma pessoa corresponde à busca."
+              : `Nenhuma pessoa com o posicionamento “${STANCE_TONE[stance].label}”${
+                  search.trim() ? " para essa busca" : ""
+                }. Troque o filtro ou ajuste o posicionamento na ficha da pessoa.`}
+          </div>
+        )}
+
+        {ordered.map((v, i) => (
+          <PersonRowLine
+            key={v.person.id}
+            view={v}
+            expanded={expandedId === v.person.id}
+            onToggleExpand={() =>
+              setExpandedId((cur) => (cur === v.person.id ? null : v.person.id))
+            }
+            border={i < ordered.length - 1}
+            onOpen={() => onOpen(v.person.id)}
+          />
+        ))}
+      </div>
+
+      {topActive && (
         <AiHint>
-          <b>{top.display_name}</b> é quem concentra mais atividade mapeada no momento (score{" "}
-          {topScore}).
+          <b>{topActive.person.display_name}</b> é quem concentra mais atividade mapeada no momento
+          (score {topActive.score}).
+        </AiHint>
+      )}
+      {topByMsgs && (
+        <AiHint>
+          <b>{topByMsgs.person.display_name}</b> é quem mais gerou mensagens monitoradas nos últimos
+          30 dias ({topByMsgs.msgs}).
         </AiHint>
       )}
 
@@ -368,114 +577,6 @@ function TabAdversarios({
   );
 }
 
-function AdversaryCard({
-  person,
-  score,
-  tags,
-  plays,
-  onOpen,
-}: {
-  person: PersonRow;
-  score: number;
-  tags: string[];
-  plays: { when: string; text: string }[];
-  onOpen: () => void;
-}) {
-  const tone: "crit" | "warn" = score >= 70 ? "crit" : "warn";
-  const toneText = tone === "crit" ? "text-v2-crit" : "text-v2-warn";
-  const toneBg = tone === "crit" ? "bg-v2-crit-bg" : "bg-v2-warn-bg";
-  const badge = score >= 70 ? "MUITO ATIVO" : "ATIVO";
-  const meta =
-    [
-      person.role,
-      person.party,
-      person.department_name,
-      person.instagram_handle ? `@${person.instagram_handle.replace(/^@/, "")}` : null,
-    ]
-      .filter(Boolean)
-      .join(" · ") || "—";
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`Abrir ficha de ${person.display_name}`}
-      className="rounded-[13px] border border-v2-line bg-v2-card px-5 py-[18px] text-left transition-colors hover:border-v2-line-strong"
-    >
-      <div className="flex items-start gap-3">
-        <span
-          className={`grid h-[42px] w-[42px] flex-none place-items-center overflow-hidden rounded-full text-[14px] font-semibold ${toneBg} ${toneText}`}
-        >
-          {person.avatar_url ? (
-            <img src={person.avatar_url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            initialsOfName(person.display_name)
-          )}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[15.5px] font-[650] text-v2-ink">{person.display_name}</span>
-            <span
-              className={`rounded px-[7px] py-0.5 font-mono text-[9.5px] font-bold ${toneBg} ${toneText}`}
-            >
-              {badge}
-            </span>
-            {person.elected_name && (
-              <span className="rounded bg-v2-blue-bg px-[7px] py-0.5 font-mono text-[9.5px] font-bold text-v2-blue">
-                TSE
-              </span>
-            )}
-          </div>
-          <div className="mt-0.5 text-[12.5px] text-v2-ink-3">{meta}</div>
-          <div className="mt-1 flex gap-2.5 font-mono text-[10.5px] text-v2-faint">
-            <span className={person.instagram_active ? "text-v2-green" : undefined}>
-              📸 {person.instagram_active ? "varrendo" : "sem varredura"}
-            </span>
-            <span className={person.whatsapp_count > 0 ? "text-v2-green" : undefined}>
-              💬 {person.whatsapp_count} whatsapp
-            </span>
-          </div>
-        </div>
-        <div className="flex-none text-right">
-          <div className={`text-[20px] font-[650] ${toneText}`}>{score}</div>
-          <div className="font-mono text-[9px] tracking-[0.08em] text-v2-faint">ATIVIDADE</div>
-        </div>
-      </div>
-      {tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {tags.map((t) => (
-            <span
-              key={t}
-              className="rounded-full bg-v2-track px-[9px] py-[3px] text-[11.5px] text-v2-ink-2"
-            >
-              {t}
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="mt-3.5 border-t border-v2-track pt-3">
-        <div className="font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
-          ÚLTIMAS JOGADAS
-        </div>
-        {plays.length === 0 && (
-          <div className="mt-1.5 text-[12.5px] text-v2-faint">Sem atividades registradas.</div>
-        )}
-        {plays.map((p) => (
-          <div
-            key={p.when + p.text}
-            className="mt-1.5 flex gap-2.5 text-[12.5px] text-v2-ink-2 first-of-type:mt-[7px]"
-          >
-            <span className="w-[46px] flex-none font-mono text-[10.5px] text-v2-faint">
-              {p.when}
-            </span>
-            {p.text}
-          </div>
-        ))}
-      </div>
-    </button>
-  );
-}
-
 function InstaHandle({
   handle,
   meta,
@@ -500,292 +601,195 @@ function InstaHandle({
   );
 }
 
-/* ─────────────────────────── Aba Pessoas (S23) ─────────────────────────── */
-
-type MemberStat = {
-  member_id: string;
-  message_count: number | null;
-  avg_sentiment: number | null;
-};
-
-function TabPessoas({
-  orgId,
-  people,
-  isLoading,
-  isError,
-  onOpen,
-}: {
-  orgId: string;
-  people: PersonRow[];
-  isLoading: boolean;
-  isError: boolean;
-  onOpen: (id: string) => void;
-}) {
-  const [search, setSearch] = useState("");
-  const [stance, setStance] = useState<"todos" | PersonRow["stance"]>("todos");
-
-  // Volume/sentimento ainda são medidos por `tracked_members.id` (member_daily_stats não
-  // conhece person_id). Este mapa member→person é a ponte enquanto as stats não migram.
-  const { data: memberLinks = [] } = useQuery({
-    queryKey: ["tracked-members-person-map", orgId],
-    queryFn: async () => {
-      // `const string` pelo mesmo motivo do bloco de sinais acima: `person_id` ainda não
-      // está no typegen.
-      const cols: string = "id, person_id";
-      const { data } = await supabase
-        .from("tracked_members")
-        .select(cols)
-        .eq("org_id", orgId)
-        .returns<{ id: string; person_id: string | null }[]>();
-      return data ?? [];
-    },
-  });
-
-  const { data: stats = [] } = useQuery({
-    queryKey: ["member-stats-30d", orgId],
-    queryFn: () => {
-      const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      // Paginado porque estas linhas são AGREGADAS abaixo (msgs 30d e sentimento médio por
-      // pessoa): a tabela tem uma linha por pessoa POR DIA, então ~34 pessoas monitoradas já
-      // estouram as 1.000 do PostgREST — e o corte não dá erro, só faz as últimas pessoas da
-      // lista aparecerem com "0 msgs / sem dados".
-      return fetchAllPages<MemberStat>((from, to) =>
-        supabase
-          .from("member_daily_stats")
-          .select("member_id, message_count, avg_sentiment")
-          .eq("org_id", orgId)
-          .gte("bucket_date", cutoff)
-          .order("id", { ascending: true }) // ordem estável: sem isso a paginação repete/pula linhas
-          .range(from, to),
-      );
-    },
-  });
-
-  /** Agregado por PESSOA (soma de todos os tracked_members apontando para ela). */
-  const agg = useMemo(() => {
-    const memberToPerson = new Map<string, string>();
-    memberLinks.forEach((m) => {
-      if (m.person_id) memberToPerson.set(m.id, m.person_id);
-    });
-    const map = new Map<string, { msgs: number; sent: number; sentN: number }>();
-    stats.forEach((s) => {
-      const personId = memberToPerson.get(s.member_id);
-      if (!personId) return;
-      const a = map.get(personId) ?? { msgs: 0, sent: 0, sentN: 0 };
-      a.msgs += s.message_count ?? 0;
-      if (s.avg_sentiment != null) {
-        a.sent += Number(s.avg_sentiment);
-        a.sentN++;
-      }
-      map.set(personId, a);
-    });
-    return map;
-  }, [stats, memberLinks]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return people.filter((p) => {
-      if (stance !== "todos" && p.stance !== stance) return false;
-      if (!q) return true;
-      return (
-        p.display_name.toLowerCase().includes(q) ||
-        (p.role ?? "").toLowerCase().includes(q) ||
-        (p.party ?? "").toLowerCase().includes(q) ||
-        (p.neighborhood ?? "").toLowerCase().includes(q) ||
-        (p.department_name ?? "").toLowerCase().includes(q) ||
-        (p.instagram_handle ?? "").toLowerCase().includes(q) ||
-        p.tags.some((t) => t.toLowerCase().includes(q))
-      );
-    });
-  }, [people, search, stance]);
-
-  const topByMsgs = useMemo<{ name: string; msgs: number } | null>(() => {
-    let best: { name: string; msgs: number } | null = null;
-    people.forEach((p) => {
-      const msgs = agg.get(p.id)?.msgs ?? 0;
-      if (msgs > 0 && (!best || msgs > best.msgs)) best = { name: p.display_name, msgs };
-    });
-    return best;
-  }, [people, agg]);
-
-  return (
-    <div>
-      {/* Toolbar */}
-      <div className="mb-4 flex flex-wrap items-center gap-2.5">
-        <div className="flex w-[280px] items-center gap-2 rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[13px] text-v2-ink-3">
-          ⌕
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome, cargo, bairro, tag…"
-            aria-label="Buscar pessoa"
-            className="w-full bg-transparent text-[13px] text-v2-ink outline-none placeholder:text-v2-ink-3"
-          />
-        </div>
-        <select
-          value={stance}
-          onChange={(e) => setStance(e.target.value as typeof stance)}
-          aria-label="Filtrar por posicionamento"
-          className="rounded-lg border border-v2-line bg-v2-card px-3 py-2 text-[12.5px] font-semibold text-v2-ink-2 outline-none"
-        >
-          <option value="todos">Todos os posicionamentos</option>
-          <option value="adversario">Adversários</option>
-          <option value="aliado">Aliados</option>
-          <option value="neutro">Neutros</option>
-          <option value="interno">Internos</option>
-        </select>
-        <div className="flex-1" />
-        <span className="font-mono text-[11px] text-v2-ink-3">
-          {filtered.length} de {people.length}
-        </span>
-      </div>
-
-      {isError && (
-        <div className="mb-3 text-[12.5px] text-v2-crit">
-          Não foi possível carregar as pessoas. Tente novamente.
-        </div>
-      )}
-
-      {/* Tabela */}
-      <div className="overflow-hidden rounded-[13px] border border-v2-line bg-v2-card">
-        <div className="grid grid-cols-[1.9fr_0.9fr_1.1fr_1fr_0.9fr_0.7fr_0.9fr] gap-3 border-b border-v2-line px-5 py-[11px] font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
-          <span>NOME</span>
-          <span>POSIÇÃO</span>
-          <span>CARGO / SECRETARIA</span>
-          <span>BAIRRO</span>
-          <span>CANAIS</span>
-          <span>MSGS 30D</span>
-          <span>SENTIMENTO</span>
-        </div>
-
-        {isLoading && <div className="px-5 py-3.5 text-[12.5px] text-v2-ink-3">Carregando…</div>}
-
-        {!isLoading && !isError && people.length === 0 && (
-          <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
-            Nenhuma pessoa cadastrada. Use “＋ Adicionar pessoa”.
-          </div>
-        )}
-
-        {people.length > 0 && filtered.length === 0 && (
-          <div className="px-5 py-6 text-center text-[12.5px] text-v2-ink-3">
-            Nenhuma pessoa corresponde ao filtro.
-          </div>
-        )}
-
-        {filtered.map((p, i) => {
-          const a = agg.get(p.id);
-          const hasStats = !!a && a.sentN > 0;
-          const sent = hasStats ? a.sent / a.sentN : 0;
-          const sentimentLabel = hasStats
-            ? `${sent >= 0 ? "+" : "−"}${Math.abs(sent).toFixed(2)} ${sent > 0.05 ? "▲" : sent < -0.05 ? "▼" : "—"}`
-            : "— sem dados";
-          const sentimentTone = !hasStats
-            ? "obs"
-            : sent > 0.05
-              ? "green"
-              : sent < -0.05
-                ? "crit"
-                : "obs";
-          return (
-            <PersonRowLine
-              key={p.id}
-              person={p}
-              msgs={String(a?.msgs ?? 0)}
-              sentiment={sentimentLabel}
-              sentimentTone={sentimentTone}
-              border={i < filtered.length - 1}
-              onOpen={() => onOpen(p.id)}
-            />
-          );
-        })}
-      </div>
-
-      {topByMsgs && (
-        <AiHint>
-          <b>{topByMsgs.name}</b> é quem mais gerou mensagens monitoradas nos últimos 30 dias (
-          {topByMsgs.msgs}).
-        </AiHint>
-      )}
-    </div>
-  );
-}
-
 const AVATAR_TONE: Record<string, string> = {
   green: "bg-v2-green-tint text-v2-green",
   neutral: "bg-v2-track text-v2-ink-3",
 };
-const SENTIMENT_TONE: Record<string, string> = {
-  crit: "text-v2-crit",
-  obs: "text-v2-ink-3",
-  green: "text-v2-green",
-};
 
 function PersonRowLine({
-  person,
-  msgs,
-  sentiment,
-  sentimentTone,
+  view,
+  expanded,
+  onToggleExpand,
   border,
   onOpen,
 }: {
-  person: PersonRow;
-  msgs: string;
-  sentiment: string;
-  sentimentTone: string;
+  view: PersonView;
+  expanded: boolean;
+  onToggleExpand: () => void;
   border?: boolean;
   onOpen: () => void;
 }) {
+  const { person, score, tags, plays, msgs, sentiment } = view;
   const tone = STANCE_TONE[person.stance];
   const cargo = [person.role, person.department_name].filter(Boolean).join(" · ") || "—";
+  const hasDetail = tags.length > 0 || plays.length > 0;
+
+  const igOn = !!person.instagram_active;
+  const igKnown = !!person.instagram_handle;
+  const waCount = person.whatsapp_count;
+  const unmonitored = !igKnown && waCount === 0;
+
+  const sentimentLabel =
+    sentiment == null
+      ? "— sem dados"
+      : `${sentiment >= 0 ? "+" : "−"}${Math.abs(sentiment).toFixed(2)} ${
+          sentiment > 0.05 ? "▲" : sentiment < -0.05 ? "▼" : "—"
+        }`;
+  const sentimentTone =
+    sentiment == null
+      ? "text-v2-ink-3"
+      : sentiment > 0.05
+        ? "text-v2-green"
+        : sentiment < -0.05
+          ? "text-v2-crit"
+          : "text-v2-ink-3";
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`Abrir ficha de ${person.display_name}`}
-      className={`grid w-full grid-cols-[1.9fr_0.9fr_1.1fr_1fr_0.9fr_0.7fr_0.9fr] items-center gap-3 px-5 py-[13px] text-left transition-colors hover:bg-v2-track/60 ${border ? "border-b border-v2-track" : ""}`}
-    >
-      <span className="flex min-w-0 items-center gap-2.5">
+    <div className={border ? "border-b border-v2-track" : ""}>
+      {/* O clique na linha inteira abre a ficha via um botão full-bleed atrás das células;
+          assim o expandir pode ser um botão irmão, sem aninhar <button> dentro de <button>. */}
+      <div className={`group relative ${ROW_GRID} px-5 py-[13px]`}>
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Abrir ficha de ${person.display_name}`}
+          className="absolute inset-0 z-0 transition-colors group-hover:bg-v2-track/60"
+        />
+        {hasDetail ? (
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "Recolher" : "Expandir"} tópicos e jogadas de ${person.display_name}`}
+            className="relative z-10 grid h-5 w-5 place-items-center rounded text-[10px] text-v2-ink-3 hover:bg-v2-track hover:text-v2-ink"
+          >
+            {expanded ? "▾" : "▸"}
+          </button>
+        ) : (
+          <span aria-hidden />
+        )}
+
+        <span className="pointer-events-none relative z-[1] flex min-w-0 items-center gap-2.5">
+          <span
+            className={`grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full text-[11px] font-semibold ${AVATAR_TONE.neutral}`}
+          >
+            {person.avatar_url ? (
+              <img src={person.avatar_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initialsOfName(person.display_name)
+            )}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13.5px] font-semibold text-v2-ink">
+              {person.display_name}
+            </span>
+            <span className="block truncate font-mono text-[10.5px] text-v2-faint">
+              {person.party || tags[0] || (person.elected_name ? "via TSE" : "")}
+            </span>
+          </span>
+        </span>
+
         <span
-          className={`grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full text-[11px] font-semibold ${AVATAR_TONE.neutral}`}
+          className={`pointer-events-none relative z-[1] w-fit rounded px-[7px] py-[3px] font-mono text-[9.5px] font-bold uppercase ${tone.chip}`}
         >
-          {person.avatar_url ? (
-            <img src={person.avatar_url} alt="" className="h-full w-full object-cover" />
+          {tone.label}
+        </span>
+        <span className="pointer-events-none relative z-[1] truncate text-[12.5px] text-v2-ink-2">
+          {cargo}
+        </span>
+        <span className="pointer-events-none relative z-[1] truncate text-[12.5px] text-v2-ink-2">
+          {person.neighborhood ? `📍 ${person.neighborhood}` : "— sem bairro"}
+        </span>
+
+        {/* Monitoramento: o que revela se a pessoa está de fato sendo acompanhada. Handle
+            cadastrado mas inativo é um estado próprio — some da varredura sem avisar.
+            Sem `title` nas células: elas são pointer-events-none (o clique pertence à
+            linha inteira), então tooltip aqui nunca dispararia. */}
+        <span className="pointer-events-none relative z-[1] flex flex-wrap gap-1.5 font-mono text-[10.5px]">
+          {unmonitored ? (
+            <span className="text-v2-faint">○ sem canal</span>
           ) : (
-            initialsOfName(person.display_name)
+            <>
+              {igKnown && (
+                <span className={igOn ? "text-v2-green" : "text-v2-warn"}>
+                  📸 {igOn ? "varrendo" : "pausado"}
+                </span>
+              )}
+              {waCount > 0 && <span className="text-v2-green">💬 {waCount}</span>}
+            </>
           )}
         </span>
-        <span className="min-w-0">
-          <span className="block truncate text-[13.5px] font-semibold text-v2-ink">
-            {person.display_name}
-          </span>
-          <span className="block truncate font-mono text-[10.5px] text-v2-faint">
-            {person.party || person.tags[0] || (person.elected_name ? "via TSE" : "")}
-          </span>
-        </span>
-      </span>
-      <span
-        className={`w-fit rounded px-[7px] py-[3px] font-mono text-[9.5px] font-bold uppercase ${tone.chip}`}
-      >
-        {tone.label}
-      </span>
-      <span className="truncate text-[12.5px] text-v2-ink-2">{cargo}</span>
-      <span className="truncate text-[12.5px] text-v2-ink-2">
-        {person.neighborhood ? `📍 ${person.neighborhood}` : "— sem bairro"}
-      </span>
-      <span className="flex gap-1.5 font-mono text-[10.5px]">
+
         <span
-          title={person.instagram_handle ? `@${person.instagram_handle}` : "sem Instagram"}
-          className={person.instagram_active ? "text-v2-green" : "text-v2-faint"}
+          className={`pointer-events-none relative z-[1] font-mono text-[12px] ${msgs == null ? "text-v2-faint" : "text-v2-ink"}`}
         >
-          📸
+          {msgs == null ? "—" : msgs}
         </span>
-        <span className={person.whatsapp_count > 0 ? "text-v2-green" : "text-v2-faint"}>
-          💬{person.whatsapp_count}
+        <span
+          className={`pointer-events-none relative z-[1] font-mono text-[12px] ${sentimentTone}`}
+        >
+          {sentimentLabel}
         </span>
-      </span>
-      <span className="font-mono text-[12px] text-v2-ink">{msgs}</span>
-      <span className={`font-mono text-[12px] ${SENTIMENT_TONE[sentimentTone]}`}>{sentiment}</span>
-    </button>
+
+        {/* Score só existe para quem tem ficha em org_adversaries; para os demais, um traço
+            discreto — "0" leria como "inativo", que é uma afirmação que não temos. */}
+        <span className="pointer-events-none relative z-[1] text-right">
+          {score == null ? (
+            <span className="font-mono text-[12px] text-v2-faint">—</span>
+          ) : (
+            <>
+              <span
+                className={`block text-[15px] font-[650] ${score >= 70 ? "text-v2-crit" : score > 0 ? "text-v2-warn" : "text-v2-ink-3"}`}
+              >
+                {score}
+              </span>
+              {score > 0 && (
+                <span
+                  className={`block font-mono text-[9px] tracking-[0.06em] ${score >= 70 ? "text-v2-crit" : "text-v2-warn"}`}
+                >
+                  {score >= 70 ? "MUITO ATIVO" : "ATIVO"}
+                </span>
+              )}
+            </>
+          )}
+        </span>
+      </div>
+
+      {expanded && hasDetail && (
+        <div className="border-t border-v2-track bg-v2-bg/40 px-5 pt-3 pb-4 pl-[52px]">
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-v2-track px-[9px] py-[3px] text-[11.5px] text-v2-ink-2"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+          {plays.length > 0 && (
+            <div className={tags.length > 0 ? "mt-3" : ""}>
+              <div className="font-mono text-[10px] font-semibold tracking-[0.08em] text-v2-faint">
+                ÚLTIMAS JOGADAS
+              </div>
+              {plays.map((p) => (
+                <div
+                  key={p.when + p.text}
+                  className="mt-1.5 flex gap-2.5 text-[12.5px] text-v2-ink-2"
+                >
+                  <span className="w-[46px] flex-none font-mono text-[10.5px] text-v2-faint">
+                    {p.when}
+                  </span>
+                  {p.text}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
