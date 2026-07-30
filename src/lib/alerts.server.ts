@@ -196,6 +196,8 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
   buckets: number;
   upserted: number;
   consolidated: number;
+  esfriados: number;
+  encerradosPorInatividade: number;
 }> {
   const since = new Date(Date.now() - WINDOW_HOURS * 60 * 60 * 1000).toISOString();
 
@@ -377,7 +379,86 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
     upserted++;
   }
 
-  return { scanned: rows.length, buckets: buckets.size, upserted, consolidated };
+  const esfriados = await esfriarCasosParados(orgId);
+
+  return { scanned: rows.length, buckets: buckets.size, upserted, consolidated, ...esfriados };
+}
+
+// Silêncio a partir do qual o caso deixa de ser urgente. A janela de detecção é de 72h,
+// então 7 dias sem NENHUM sinal novo é silêncio deliberado, não intervalo entre execuções.
+const DIAS_PARA_ESFRIAR = 7;
+// Três semanas sem sinal: o assunto morreu. Se voltar, a regra de ciclo cria um caso novo —
+// e preservar os dois eventos separados é o que permite dizer "voltou depois de um mês".
+const DIAS_PARA_ENCERRAR = 21;
+
+const ESFRIA_PARA: Record<string, string> = { vermelho: "laranja", laranja: "amarelo" };
+
+/**
+ * Esfria casos sem sinal novo.
+ *
+ * A regra "nível não desce dentro de um ciclo aberto" protege o caso EM MOVIMENTO: o que já
+ * foi vermelho não vira amarelo só porque a janela de detecção passou. Sem contrapartida,
+ * porém, ela nunca solta — o caso fica aberto e vermelho até alguém clicar em resolver. Na
+ * org piloto isso deixou metade da tela de triagem marcada como crítica, e tela em que tudo
+ * é crítico não tria nada.
+ *
+ * Aqui a exceção é explícita e só vale para INATIVIDADE: sem sinal novo o caso desce um
+ * nível por execução e, persistindo o silêncio, encerra com `closed_reason = 'inatividade'`
+ * — nunca confundido com "o gabinete resolveu", que é `closed_reason` nulo.
+ */
+async function esfriarCasosParados(
+  orgId: string,
+): Promise<{ esfriados: number; encerradosPorInatividade: number }> {
+  const agora = Date.now();
+  const corteEsfriar = new Date(agora - DIAS_PARA_ESFRIAR * 86400_000).toISOString();
+  const corteEncerrar = new Date(agora - DIAS_PARA_ENCERRAR * 86400_000).toISOString();
+
+  const abertos = await fetchAllPages<{
+    id: string;
+    level: string | null;
+    last_seen_at: string | null;
+  }>((from, to) =>
+    supabaseAdmin
+      .from("alerts")
+      .select("id, level, last_seen_at")
+      .eq("org_id", orgId)
+      .is("resolved_at", null)
+      .lte("last_seen_at", corteEsfriar)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+  if (abertos.length === 0) return { esfriados: 0, encerradosPorInatividade: 0 };
+
+  const paraEncerrar = abertos
+    .filter((a) => (a.last_seen_at ?? "") <= corteEncerrar)
+    .map((a) => a.id);
+  const paraEsfriar = abertos.filter(
+    (a) => !paraEncerrar.includes(a.id) && a.level && ESFRIA_PARA[a.level],
+  );
+
+  if (paraEncerrar.length > 0) {
+    const { error } = await supabaseAdmin
+      .from("alerts")
+      // @ts-expect-error `closed_reason` entra na migração alerts_esfriamento (typegen regenera depois)
+      .update({ resolved_at: new Date().toISOString(), closed_reason: "inatividade" })
+      .in("id", paraEncerrar);
+    if (error) console.error("[alerts] falha ao encerrar por inatividade:", error);
+  }
+
+  // Um UPDATE por nível de destino, em vez de um por linha: são dois níveis possíveis.
+  let esfriados = 0;
+  for (const [de, para] of Object.entries(ESFRIA_PARA)) {
+    const ids = paraEsfriar.filter((a) => a.level === de).map((a) => a.id);
+    if (ids.length === 0) continue;
+    const { error } = await supabaseAdmin
+      .from("alerts")
+      .update({ level: para as never, updated_at: new Date().toISOString() })
+      .in("id", ids);
+    if (error) console.error(`[alerts] falha ao esfriar ${de}→${para}:`, error);
+    else esfriados += ids.length;
+  }
+
+  return { esfriados, encerradosPorInatividade: paraEncerrar.length };
 }
 
 export async function detectAlertsAllOrgs(): Promise<

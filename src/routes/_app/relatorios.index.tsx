@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listReports } from "@/lib/reports.functions";
 import { useCurrentOrg } from "@/lib/use-current-org";
+import { HeadlineAccent, ScreenHeadline } from "@/components/v2/screen-headline";
 
 export const Route = createFileRoute("/_app/relatorios/")({
   head: () => ({ meta: [{ title: "Relatórios — Inpol v2" }] }),
@@ -24,6 +25,21 @@ function formatWhen(iso: string) {
   }).format(new Date(iso));
 }
 
+function formatDay(iso: string) {
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(new Date(iso));
+}
+
+function timeAgo(iso: string): string {
+  const h = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 3600_000));
+  if (h < 1) return "há menos de 1h";
+  if (h < 24) return `há ${h}h`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "há 1 dia" : `há ${d} dias`;
+}
+
+/** O diário sai às 08h. Antes das 9h da manhã, a ausência é agenda — não atraso. */
+const DAILY_GRACE_HOUR = 9;
+
 /**
  * S7 — Relatórios: lista com TL;DR visível — sem abrir já se sabe o que tem dentro.
  * Dados reais via listReports (org atual). Botão "Gerar agora" mantido apenas visual —
@@ -43,16 +59,50 @@ function Screen() {
     enabled: !!orgId,
   });
 
+  /**
+   * A manchete de Relatórios responde ao que a LISTA sabe: qual é a edição mais recente e se a
+   * do dia já saiu. Não responde "o que mudou desde o último" — `listReports` traz só metadados
+   * (kind, título, datas), nunca o conteúdo, então comparar temas entre edições exigiria abrir os
+   * dois relatórios. Prometer a comparação aqui seria inventá-la; a nota diz onde ela está.
+   */
+  const latest = reports[0];
+  const lastDaily = reports.find((r) => r.kind === "daily");
+  const today = new Date().toDateString();
+  const dailyDoneToday = !!lastDaily && new Date(lastDaily.generated_at).toDateString() === today;
+  const dailyLate = !dailyDoneToday && new Date().getHours() >= DAILY_GRACE_HOUR;
+
   return (
     <div className="mx-auto w-full max-w-[820px]">
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[24px] font-[650] tracking-[-0.01em] text-v2-ink">Relatórios</h1>
-          <p className="mt-1 text-[13.5px] text-v2-ink-3">
-            Diário às 08h · semanal segunda · mensal dia 1º. Também chegam no seu WhatsApp.
-          </p>
-        </div>
+        <ScreenHeadline
+          eyebrow="RELATÓRIOS"
+          loading={!!orgId && isLoading}
+          loadingLabel="Carregando os relatórios…"
+          blind={!isError && reports.length === 0}
+          note={
+            <>
+              Diário às 08h · semanal segunda · mensal dia 1º. A lista guarda só data e título — a
+              diferença de temas entre duas edições só aparece abrindo cada uma.
+            </>
+          }
+        >
+          {isError ? (
+            <>Não foi possível carregar os relatórios agora.</>
+          ) : reports.length === 0 ? (
+            <>Nenhum relatório gerado até agora — o primeiro sai no próximo agendamento.</>
+          ) : (
+            <>
+              O mais recente é o{" "}
+              <HeadlineAccent tone={dailyLate ? "warn" : "green"}>
+                {(KIND_META[latest.kind]?.label ?? latest.kind).toLowerCase()} de{" "}
+                {formatDay(latest.generated_at)}
+              </HeadlineAccent>
+              , {timeAgo(latest.generated_at)}
+              {dailyLate ? ". O diário de hoje ainda não foi gerado." : "."}
+            </>
+          )}
+        </ScreenHeadline>
         <button
           disabled
           title="Geração manual temporariamente desativada"
@@ -66,18 +116,10 @@ function Screen() {
         <div className="mt-[22px] text-[13px] text-v2-ink-3">Selecione uma organização.</div>
       )}
 
+      {/* Carregando, erro e lista vazia já são ditos pela manchete — repetir aqui só duplicava
+          a mesma frase duas vezes na mesma dobra. */}
       {orgId && isError && (
-        <div className="mt-[22px] text-[13px] text-v2-crit">
-          Não foi possível carregar os relatórios. Tente novamente.
-        </div>
-      )}
-
-      {orgId && isLoading && <div className="mt-[22px] text-[13px] text-v2-ink-3">Carregando…</div>}
-
-      {orgId && !isLoading && !isError && reports.length === 0 && (
-        <div className="mt-[22px] text-[13px] text-v2-ink-3">
-          Nenhum relatório ainda. O primeiro chega no próximo agendamento.
-        </div>
+        <div className="mt-[22px] text-[13px] text-v2-crit">Tente novamente em instantes.</div>
       )}
 
       {/* Report list */}

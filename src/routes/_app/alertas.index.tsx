@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNowStrict, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { listAlerts } from "@/lib/dashboard.functions";
+import { countResolvedAlerts, listAlerts } from "@/lib/dashboard.functions";
 import { resolveAlert } from "@/lib/alerts.functions";
 import { casoIdFor } from "@/lib/casos.functions";
 import { useCurrentOrg } from "@/lib/use-current-org";
@@ -83,6 +83,15 @@ function Alertas() {
     enabled: !!orgId,
   });
 
+  // `listAlerts` só devolve o que está EM ABERTO, então o encerrado precisa de contagem
+  // própria — sem ela o contador ficava em `—`, que sugeria "não dá para saber" quando
+  // na verdade era só falta de query.
+  const resolved7d = useQuery({
+    queryKey: ["alerts-resolved-7d", orgId],
+    queryFn: () => countResolvedAlerts({ data: { orgId: orgId as string, days: 7 } }),
+    enabled: !!orgId,
+  });
+
   const resolve = useMutation({
     mutationFn: (alertId: string) => resolveAlert({ data: { alertId } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alerts", orgId] }),
@@ -145,7 +154,11 @@ function Alertas() {
             count={isLoading ? "…" : (grouped[g.level]?.length ?? 0)}
           />
         ))}
-        <StageStat dot="bg-v2-green" label="Resolvidos (7d)" count="—" />
+        <StageStat
+          dot="bg-v2-green"
+          label="Resolvidos (7d)"
+          count={resolved7d.isLoading ? "…" : String(resolved7d.data ?? 0)}
+        />
       </div>
 
       {!isLoading && rows.length === 0 && !isError && (

@@ -9,6 +9,7 @@ import {
   BlindTag,
   BlindValue,
 } from "@/components/v2/empty-signal";
+import { HeadlineAccent, ScreenHeadline } from "@/components/v2/screen-headline";
 import { useCurrentOrg } from "@/lib/use-current-org";
 
 export const Route = createFileRoute("/_app/camara/")({
@@ -121,18 +122,32 @@ function Screen() {
     <div className="flex flex-col">
       {/* Header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <div className="text-[24px] font-[650] tracking-[-0.01em] text-v2-ink">
-            Câmara Municipal
-          </div>
-          <div className="mt-1 text-[13.5px] text-v2-ink-3">
-            {isLoading
-              ? "Carregando eleitos…"
-              : vereadores.length > 0
-                ? `Placar de alinhamento de ${vereadores.length} vereadores eleitos (dados do TSE).`
-                : "Nenhum vereador importado do TSE nesta organização."}
-          </div>
-        </div>
+        {/* A manchete desta tela é a única honesta possível: a pergunta "o que a Câmara fez?" não
+            tem resposta no produto. Não há coleta de sessão, pauta ou votação — e uma manchete
+            que sugerisse atividade legislativa (ou calmaria) seria inventada. O que existe de
+            real é o placar de alinhamento vindo do TSE, e é isso que a segunda linha entrega. */}
+        <ScreenHeadline
+          eyebrow="CÂMARA MUNICIPAL"
+          loading={isLoading}
+          loadingLabel="Carregando os eleitos…"
+          blind
+          note={
+            vereadores.length > 0
+              ? "O que esta tela tem de real: os eleitos do TSE e o alinhamento classificado pela equipe. Sessões, pautas, falas e requerimentos não são coletados por nenhuma integração."
+              : "Sem eleitos importados, nem o placar de alinhamento existe. Sessões, pautas, falas e requerimentos também não são coletados."
+          }
+        >
+          {isError ? (
+            <>Não foi possível carregar os eleitos agora.</>
+          ) : vereadores.length > 0 ? (
+            <>
+              Não há como dizer o que a Câmara fez — só quem ela é:{" "}
+              <HeadlineAccent tone="flat">{vereadores.length} vereadores</HeadlineAccent> eleitos.
+            </>
+          ) : (
+            <>Não há como dizer o que a Câmara fez, nem quem ela é: nenhum eleito importado.</>
+          )}
+        </ScreenHeadline>
         <div className="flex items-center gap-3.5">
           {/* A agenda da Câmara não é integrada — anunciar "próxima sessão: ter 22 jul" era
               inventar compromisso de gabinete. */}

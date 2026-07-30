@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { listCasos, type CasoResumo } from "@/lib/casos.functions";
 import { useCurrentOrg } from "@/lib/use-current-org";
+import { HeadlineAccent, ScreenHeadline } from "@/components/v2/screen-headline";
 
 export const Route = createFileRoute("/_app/casos/")({
   head: () => ({ meta: [{ title: "Casos — Inpol v2" }] }),
@@ -26,6 +27,9 @@ const NIVEL: Record<string, { label: string; badge: string; barra: string }> = {
   laranja: { label: "ATENÇÃO", badge: "bg-v2-warn-bg text-v2-warn", barra: "bg-v2-warn-strong" },
   amarelo: { label: "OBSERVAÇÃO", badge: "bg-v2-obs-bg text-v2-obs", barra: "bg-v2-faint" },
 };
+
+/** Janela do "esquentou" da manchete: caso aberto com sinal nos últimos 7 dias. */
+const RECENTE_MS = 7 * 86_400_000;
 
 function temaLegivel(tema: string) {
   return tema.replace(/_/g, " ");
@@ -59,22 +63,87 @@ function Casos() {
     );
   }, [q.data, busca]);
 
-  const abertos = casos.filter((c) => c.aberto).length;
+  const emAberto = casos.filter((c) => c.aberto);
+  const abertos = emAberto.length;
+
+  /**
+   * "Esquentou" aqui é uma afirmação verificável, não uma impressão: caso aberto cujo ÚLTIMO
+   * sinal caiu nos últimos 7 dias. Não dizemos "piorou" nem "subiu de nível" — `listCasos` traz
+   * a síntese da janela inteira, sem o mesmo recorte no período anterior para comparar.
+   */
+  const recentes = emAberto.filter(
+    (c) => Date.now() - new Date(c.ultimoSinal).getTime() <= RECENTE_MS,
+  ).length;
+  const janelaLabel = JANELAS.find((j) => j.dias === days)?.label ?? `${days} dias`;
 
   if (!orgId) {
     return <div className="text-[13px] text-v2-ink-3">Selecione uma organização.</div>;
   }
 
+  const headline = (() => {
+    if (q.isError) return { blind: true, text: <>Não foi possível carregar os casos agora.</> };
+    if (casos.length === 0) {
+      return {
+        blind: true,
+        text: busca ? (
+          <>
+            Nenhum caso bate com “{busca.trim()}” em {janelaLabel}.
+          </>
+        ) : (
+          <>Nenhum caso em {janelaLabel} — sem alerta detectado, não há caso para reunir.</>
+        ),
+      };
+    }
+    if (abertos === 0) {
+      return {
+        blind: false,
+        text: (
+          <>
+            Nada em aberto: os <HeadlineAccent tone="green">{casos.length} casos</HeadlineAccent> de{" "}
+            {janelaLabel} estão resolvidos.
+          </>
+        ),
+      };
+    }
+    return {
+      blind: false,
+      text: (
+        <>
+          <HeadlineAccent>
+            {abertos} caso{abertos > 1 ? "s" : ""}
+          </HeadlineAccent>{" "}
+          em aberto
+          {recentes > 0 ? (
+            <>
+              ; <HeadlineAccent tone="warn">{recentes}</HeadlineAccent> com sinal novo nos últimos 7
+              dias.
+            </>
+          ) : (
+            <> — nenhum recebeu sinal novo nos últimos 7 dias.</>
+          )}
+        </>
+      ),
+    };
+  })();
+
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[24px] font-[650] tracking-[-0.01em] text-v2-ink">Casos</h1>
-          <p className="mt-1 max-w-[560px] text-[13.5px] leading-[1.55] text-v2-ink-3">
-            Um caso é um tema num bairro — o acontecimento inteiro, com sua linha do tempo,
-            evidência e desdobramentos. É a peça que a reunião discute.
-          </p>
-        </div>
+        <ScreenHeadline
+          eyebrow={`CASOS · ${janelaLabel.toUpperCase()}`}
+          loading={q.isLoading}
+          loadingLabel="Reunindo os casos do período…"
+          blind={headline.blind}
+          note={
+            <>
+              Um caso é um tema num bairro, com linha do tempo e evidência. Só nascem de alerta
+              detectado — o que não virou alerta não aparece aqui
+              {busca && " · filtro de busca ativo"}.
+            </>
+          }
+        >
+          {headline.text}
+        </ScreenHeadline>
         <div className="flex items-center gap-2">
           <input
             value={busca}
@@ -100,10 +169,7 @@ function Casos() {
         </div>
       </div>
 
-      {q.isLoading && (
-        <div className="mt-6 text-[13px] text-v2-ink-3">Reunindo os casos do período…</div>
-      )}
-
+      {/* Carregando já é dito pela manchete — não repetir a mesma frase logo abaixo dela. */}
       {q.isError && (
         <div className="mt-6 rounded-xl border border-v2-crit/30 bg-v2-crit-bg px-4 py-3 text-[13px] text-v2-crit">
           Não foi possível carregar os casos. Tente novamente.
@@ -117,11 +183,12 @@ function Casos() {
             {JANELAS.find((j) => j.dias === days)?.label.toUpperCase()}
           </div>
 
+          {/* A frase inteira já está na manchete; aqui fica só o rodapé do vazio, sem repeti-la. */}
           {casos.length === 0 && (
             <div className="mt-3 rounded-[13px] border border-v2-line bg-v2-card px-5 py-6 text-[13.5px] text-v2-ink-3">
               {busca
-                ? "Nenhum caso bate com esse filtro."
-                : "Nenhum caso no período. Casos nascem dos alertas — sem alerta detectado, não há caso para reunir."}
+                ? "Limpe o filtro para ver todos os casos da janela."
+                : "Ausência de caso não é ausência de assunto na cidade: é ausência de alerta detectado no período."}
             </div>
           )}
 

@@ -12,6 +12,7 @@ import {
   BlindPanel,
   BlindValue,
 } from "@/components/v2/empty-signal";
+import { HeadlineAccent, ScreenHeadline } from "@/components/v2/screen-headline";
 
 export const Route = createFileRoute("/_app/territorio")({
   head: () => ({ meta: [{ title: "Território — Inpol v2" }] }),
@@ -77,10 +78,23 @@ function toneForApproval(approval: number): Tone {
 }
 
 const RANGES = [
-  { id: "7d", days: 7 },
-  { id: "30d", days: 30 },
-  { id: "90d", days: 90 },
+  { id: "7d", days: 7, label: "7 dias" },
+  { id: "30d", days: 30, label: "30 dias" },
+  { id: "90d", days: 90, label: "90 dias" },
 ] as const;
+
+/**
+ * Volume mínimo para um bairro entrar na manchete.
+ *
+ * `approval` é derivado da média de sentimento (ver `getTerritoryStats`), então um bairro com
+ * DUAS mensagens ruins marca 10% e lideraria o "pior bairro" lido em voz alta na reunião. O
+ * ranking na lateral pode mostrar tudo — a manchete, não: ela precisa de base. Abaixo do piso, a
+ * tela diz que não há volume, em vez de apontar um bairro por acidente estatístico.
+ */
+const HEADLINE_MIN_MSGS = 5;
+
+/** 50% é o ponto neutro da escala de aprovação — acima disso não há "perdendo" a declarar. */
+const NEUTRAL_APPROVAL = 50;
 
 type Item = { name: string; msgs: number; sentiment: number; approval: number };
 
@@ -107,7 +121,7 @@ function Screen() {
     queryFn: () => listVocabulary({ data: { orgId: orgId as string } }),
   });
 
-  const { data: groups = [] } = useQuery({
+  const { data: groups = [], isLoading: groupsLoading } = useQuery({
     queryKey: ["territorio-grupos", orgId],
     enabled: !!orgId,
     queryFn: async () => {
@@ -210,20 +224,109 @@ function Screen() {
   const negativeShare =
     totalMsgs > 0 ? Math.round((negatives.reduce((s, it) => s + it.msgs, 0) / totalMsgs) * 100) : 0;
 
+  /**
+   * A manchete: "onde estou perdendo?".
+   *
+   * Toda afirmação aqui tem que sobreviver a ser lida em voz alta. Por isso a ordem dos testes é
+   * do menos para o mais afirmativo: primeiro checamos se temos direito de falar da cidade
+   * (escuta ativa, mensagem classificada, volume mínimo), e só no fim apontamos bairro.
+   * Não há período anterior nesta query (`getTerritoryStats` agrega uma janela só), então a
+   * manchete NUNCA diz "piorou" — diz onde está pior, que é o que os dados sustentam.
+   */
+  const rangeLabel = RANGES.find((r) => r.id === range)?.label ?? range;
+  const rankable = items.filter((it) => it.msgs >= HEADLINE_MIN_MSGS);
+  const worstRanked = [...rankable].sort((a, b) => a.approval - b.approval);
+  const losing = worstRanked.filter((it) => it.approval < NEUTRAL_APPROVAL).slice(0, 2);
+  const losingMsgs = losing.reduce((s, it) => s + it.msgs, 0);
+
   if (!orgId) {
     return <div className="p-6 text-[13px] text-v2-ink-3">Selecione uma organização.</div>;
   }
+
+  const headline = (() => {
+    if (isError) return { blind: true, text: <>Não foi possível ler o território agora.</> };
+    if (coverage.monitoredGroups === 0) {
+      return {
+        blind: true,
+        text: <>Não há como dizer onde você está perdendo: nenhum bairro tem escuta ativa.</>,
+      };
+    }
+    if (items.length === 0) {
+      return {
+        blind: true,
+        text: (
+          <>
+            Nenhuma mensagem classificada por bairro em {rangeLabel}, com {coverage.monitoredGroups}{" "}
+            grupo{coverage.monitoredGroups > 1 ? "s" : ""} escutando.
+          </>
+        ),
+      };
+    }
+    if (losing.length === 0 && rankable.length === 0) {
+      return {
+        blind: true,
+        text: (
+          <>
+            Nenhum bairro chega a {HEADLINE_MIN_MSGS} mensagens em {rangeLabel} — volume baixo
+            demais para apontar onde você está perdendo.
+          </>
+        ),
+      };
+    }
+    if (losing.length === 0) {
+      const best = worstRanked[worstRanked.length - 1];
+      return {
+        blind: false,
+        text: (
+          <>
+            Nenhum bairro em terreno negativo em {rangeLabel} — o mais baixo é{" "}
+            <HeadlineAccent tone="green">{worstRanked[0].name}</HeadlineAccent>, com{" "}
+            {worstRanked[0].approval}% de aprovação
+            {best && best.name !== worstRanked[0].name
+              ? ` (o melhor, ${best.name}, tem ${best.approval}%)`
+              : ""}
+            .
+          </>
+        ),
+      };
+    }
+    return {
+      blind: false,
+      text: (
+        <>
+          <HeadlineAccent>{losing.map((it) => it.name).join(" e ")}</HeadlineAccent>{" "}
+          {losing.length > 1 ? "são os bairros mais negativos" : "é o bairro mais negativo"} em{" "}
+          {rangeLabel} — {losing.map((it) => `${it.approval}%`).join(" e ")} de aprovação em{" "}
+          {losingMsgs.toLocaleString("pt-BR")} mensagens.
+        </>
+      ),
+    };
+  })();
 
   return (
     <div>
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[24px] font-[650] tracking-[-0.01em] text-v2-ink">Território</h1>
-          <p className="mt-1 text-[13.5px] text-v2-ink-3">
-            Aprovação e sentimento por bairro de Jundiaí, a partir das mensagens analisadas.
-          </p>
-        </div>
+        <ScreenHeadline
+          eyebrow={`TERRITÓRIO · ${rangeLabel.toUpperCase()}`}
+          // A cobertura vem de outra query: sem ela, "nenhum bairro tem escuta ativa" seria dito
+          // só porque a lista de grupos ainda não chegou.
+          loading={isLoading || groupsLoading}
+          loadingLabel="Apurando o território…"
+          blind={headline.blind}
+          note={
+            // O recorte da manchete: ela fala dos bairros com escuta, nunca da cidade inteira.
+            <>
+              {coverage.heardCount} bairro(s) com sinal no período
+              {coverage.blind.length > 0 && ` · ${coverage.blind.length} sem escuta nenhuma`}
+              {coverage.groupsWithoutPlace > 0 &&
+                ` · ${coverage.groupsWithoutPlace} grupo(s) monitorado(s) sem bairro vinculado`}
+              .
+            </>
+          }
+        >
+          {headline.text}
+        </ScreenHeadline>
         <div className="flex gap-0.5 rounded-lg bg-v2-track p-[3px]">
           {RANGES.map((r) => (
             <button

@@ -5,6 +5,7 @@ import { getNewsFilters, listNewsFeed } from "@/lib/news.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrg } from "@/lib/use-current-org";
 import { BLIND_ACTION_CLASS, BlindNote, BlindPanel } from "@/components/v2/empty-signal";
+import { HeadlineAccent, ScreenHeadline } from "@/components/v2/screen-headline";
 
 export const Route = createFileRoute("/_app/sinais")({
   head: () => ({ meta: [{ title: "Sinais — Inpol v2" }] }),
@@ -57,6 +58,17 @@ const SOURCE_REQUIREMENT: Record<Source, string> = {
   x: "nenhuma fonte de X configurada",
   facebook: "nenhuma fonte de Facebook configurada",
 };
+
+/** Janela do "novo" da manchete: o que chegou desde ontem a esta hora. */
+const NEW_WINDOW_MS = 24 * 3600_000;
+
+function timeAgo(iso: string): string {
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 60) return `há ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `há ${h}h`;
+  return `há ${Math.round(h / 24)}d`;
+}
 
 function Screen() {
   const { orgId } = useCurrentOrg();
@@ -137,26 +149,155 @@ function Screen() {
   const neighborhoods = useMemo(() => vocab.filter((v) => v.kind === "neighborhood"), [vocab]);
   const terms = useMemo(() => vocab.filter((v) => v.kind !== "neighborhood"), [vocab]);
 
-  const rows = feed.data ?? [];
+  // Memoizado porque alimenta o cálculo da manchete: sem isso o `[]` de fallback é um array novo
+  // a cada render e o `useMemo` abaixo nunca aproveitaria o cache.
+  const rows = useMemo(() => feed.data ?? [], [feed.data]);
   // Os filtros agora rodam no banco, então a lista vir cheia significa "existe mais lá atrás"
   // — e não mais "o corte já tinha acontecido antes de filtrar". O "+" torna o número honesto.
   const canLoadMore = rows.length >= limit;
   const countLabel = feed.isLoading ? "…" : `${rows.length}${canLoadMore ? "+" : ""}`;
 
+  /**
+   * O material da manchete: "o que é novo?".
+   *
+   * O feed vem ordenado por `posted_at` desc e é cortado em `limit` — ou seja, a truncagem come
+   * os sinais MAIS ANTIGOS. Isso define exatamente o que temos direito de afirmar:
+   *   • as últimas 24h estão completas se não há mais nada a carregar OU se o sinal mais antigo
+   *     já carregado é anterior ao corte de 24h (o corte nunca alcançou a janela recente);
+   *   • "assunto que não existia antes" só pode ser dito com os 14 dias inteiros carregados —
+   *     senão um tema antigo cortado pelo limite viraria "novidade" por acidente de paginação,
+   *     que é justamente o tipo de número que engana numa reunião.
+   */
+  const novidade = useMemo(() => {
+    const cutoff = Date.now() - NEW_WINDOW_MS;
+    const at = (r: NewsRow) => new Date(r.posted_at).getTime();
+    const topicOf = (r: NewsRow) => {
+      const a = Array.isArray(r.analysis) ? r.analysis[0] : r.analysis;
+      const t = a?.topic?.trim();
+      return t ? t.toLowerCase() : null;
+    };
+    const recent = rows.filter((r) => at(r) >= cutoff);
+    const older = rows.filter((r) => at(r) < cutoff);
+    const oldest = rows[rows.length - 1];
+    const last24Complete = !canLoadMore || (!!oldest && at(oldest) < cutoff);
+    const olderTopics = new Set(older.map(topicOf).filter(Boolean));
+    const recentTopics = [...new Set(recent.map(topicOf).filter(Boolean))] as string[];
+    return {
+      recentCount: recent.length,
+      last24Complete,
+      windowComplete: !canLoadMore,
+      /** Temas vistos nas 24h que não aparecem no resto da janela carregada. */
+      fresh: recentTopics.filter((t) => !olderTopics.has(t)),
+      latest: rows[0]?.posted_at ?? null,
+    };
+  }, [rows, canLoadMore]);
+
+  const filtrado =
+    filter !== "all" || neighborhood !== "all" || vocabTerm !== "all" || onlyNegative;
+  const allSourcesOff = coverage.data ? Object.values(coverage.data).every((v) => !v) : false;
+
   if (!orgId) {
     return <div className="p-6 text-[13px] text-v2-ink-3">Selecione uma organização.</div>;
   }
+
+  const headline = (() => {
+    if (feed.isError) return { blind: true, text: <>Não foi possível carregar os sinais agora.</> };
+    if (allSourcesOff) {
+      return {
+        blind: true,
+        text: <>Nenhuma fonte de escuta configurada — não há novidade porque não há coleta.</>,
+      };
+    }
+    if (filter !== "all" && isConfigured(filter) === false) {
+      return {
+        blind: true,
+        text: (
+          <>
+            {SOURCE_REQUIREMENT[filter]} — o vazio desta aba é falta de escuta, não ausência de
+            movimento.
+          </>
+        ),
+      };
+    }
+    if (rows.length === 0) {
+      return {
+        blind: true,
+        text: (
+          <>
+            Nada coletado nos últimos {FEED_DAYS} dias
+            {filtrado ? " com os filtros atuais" : ""}.
+          </>
+        ),
+      };
+    }
+    if (novidade.recentCount === 0) {
+      return {
+        blind: false,
+        text: (
+          <>
+            Nada novo nas últimas 24h — o sinal mais recente chegou{" "}
+            <HeadlineAccent tone="flat">
+              {novidade.latest ? timeAgo(novidade.latest) : ""}
+            </HeadlineAccent>
+            .
+          </>
+        ),
+      };
+    }
+    const n = novidade.recentCount;
+    const sufixo = novidade.last24Complete ? "" : "+"; // corte ainda pode estar dentro das 24h
+    if (novidade.windowComplete && novidade.fresh.length > 0) {
+      return {
+        blind: false,
+        text: (
+          <>
+            <HeadlineAccent>
+              {novidade.fresh.length} assunto{novidade.fresh.length > 1 ? "s" : ""}
+            </HeadlineAccent>{" "}
+            {novidade.fresh.length > 1 ? "apareceram" : "apareceu"} nas últimas 24h que não
+            {novidade.fresh.length > 1 ? " apareciam" : " aparecia"} antes nos {FEED_DAYS} dias — em{" "}
+            {n} sinais.
+          </>
+        ),
+      };
+    }
+    return {
+      blind: false,
+      text: (
+        <>
+          <HeadlineAccent tone="flat">
+            {n}
+            {sufixo} sinais
+          </HeadlineAccent>{" "}
+          nas últimas 24h
+          {novidade.windowComplete
+            ? " — nenhum assunto que já não aparecesse antes."
+            : ` — os ${FEED_DAYS} dias não estão carregados por inteiro, então não dá para dizer quais assuntos são novos.`}
+        </>
+      ),
+    };
+  })();
 
   return (
     <div className="mx-auto max-w-[920px]">
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-[24px] font-[650] tracking-[-0.01em] text-v2-ink">Sinais</h1>
-          <p className="mt-1 text-[13.5px] text-v2-ink-3">
-            Tudo que a IA leu nas últimas horas — alimenta bairros, temas, alertas e relatórios.
-          </p>
-        </div>
+        <ScreenHeadline
+          eyebrow="SINAIS · ÚLTIMAS 24H"
+          // A cobertura decide se um feed vazio é silêncio ou surdez; não afirmar antes dela.
+          loading={feed.isLoading || coverage.isLoading}
+          loadingLabel="Lendo os sinais…"
+          blind={headline.blind}
+          note={
+            <>
+              Contagem do que foi coletado, não do que aconteceu na cidade
+              {filtrado && " · recorte dos filtros atuais"}
+              {missingSources.length > 0 && ` · ${missingSources.length} frente(s) sem escuta`}.
+            </>
+          }
+        >
+          {headline.text}
+        </ScreenHeadline>
         <span className="font-mono text-[11px] text-v2-green">
           ● {countLabel} sinais carregados
         </span>

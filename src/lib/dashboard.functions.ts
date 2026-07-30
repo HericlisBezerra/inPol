@@ -174,3 +174,32 @@ export const syncNow = createServerFn({ method: "POST" })
     const r = await detectAlertsForOrg(data.orgId);
     return { ok: true, alerts_upserted: r.upserted, buckets: r.buckets };
   });
+
+/**
+ * Quantos alertas foram encerrados na janela recente.
+ *
+ * Existe separado porque `listAlerts` filtra `resolved_at is null` por definição — ela
+ * lista o que está EM ABERTO. Sem esta contagem, a tela de Alertas mostrava `—` em
+ * "Resolvidos (7d)": honesto, mas era ausência de query, não ausência de dado.
+ * `head: true` para não trafegar as linhas — só o número interessa.
+ */
+export const countResolvedAlerts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({ orgId: z.string().uuid(), days: z.number().int().min(1).max(90).default(7) })
+      .parse(d),
+  )
+  .handler(async ({ data, context }): Promise<number> => {
+    const desde = new Date(Date.now() - data.days * 86400_000).toISOString();
+    const { count, error } = await context.supabase
+      .from("alerts")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", data.orgId)
+      .gte("resolved_at", desde);
+    if (error) {
+      console.error("[alerts] erro ao contar resolvidos:", error);
+      throw new Error("Não foi possível contar os alertas resolvidos.");
+    }
+    return count ?? 0;
+  });
