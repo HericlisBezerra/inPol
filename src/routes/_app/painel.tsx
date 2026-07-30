@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getDashboard } from "@/lib/dashboard.functions";
 import { useCurrentOrg } from "@/lib/use-current-org";
 import { V2Eyebrow } from "@/components/v2/shell";
+import { BLIND_ACTION_CLASS, BlindNote, BlindValue } from "@/components/v2/empty-signal";
 
 export const Route = createFileRoute("/_app/painel")({
   head: () => ({ meta: [{ title: "Painel — Inpol v2" }] }),
@@ -150,6 +151,22 @@ function Painel() {
   // Total real de alertas abertos — NÃO `alerts.length`: essa lista é limitada a 10 para os
   // cards, então a manchete travava em "10 assuntos" mesmo com 25 abertos.
   const openCount = data?.openAlertsTotal ?? alerts.length;
+
+  /**
+   * Estado da escuta. É o que separa "nada aconteceu" de "nada chegou": sem grupo monitorado
+   * ou sem nenhuma análise nos últimos 7 dias, TODOS os blocos abaixo ficam vazios pelo mesmo
+   * motivo — e um painel que abre com "nenhum alerta em aberto" nesse cenário está afirmando
+   * calmaria com base em silêncio próprio. Só decidimos isso depois que `data` chegou.
+   */
+  const kpi = data?.kpi;
+  const loaded = !isLoading && !!data;
+  const monitoredGroups = kpi?.monitored ?? 0;
+  const totalGroups = kpi?.totalGroups ?? 0;
+  const analyzed7d = kpi?.analyzed7d ?? 0;
+  const deafWhatsapp = loaded && monitoredGroups === 0;
+  const nothingAnalyzed = loaded && analyzed7d === 0;
+  const blind = deafWhatsapp || nothingAnalyzed;
+
   const syncLabel = dataUpdatedAt
     ? `SINCRONIZADO ${timeAgo(new Date(dataUpdatedAt).toISOString())}`
     : "";
@@ -179,10 +196,57 @@ function Painel() {
               </span>{" "}
               precisa{openCount > 1 ? "m" : ""} de você agora.
             </>
+          ) : blind ? (
+            // "Nenhum alerta" só é boa notícia se alguém estava ouvindo. Sem escuta, a manchete
+            // vira uma afirmação sobre a cidade que o sistema não tem como sustentar.
+            "Bom dia. Sem escuta ativa — não há como afirmar que está calmo."
           ) : (
             "Bom dia. Nenhum alerta em aberto no momento."
           )}
         </h1>
+
+        {/* Faixa de cobertura: o painel diz, de saída, sobre quanto do território ele fala. */}
+        {loaded && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 font-mono text-[11px]">
+            <span className={deafWhatsapp ? "text-v2-warn" : "text-v2-ink-3"}>
+              ESCUTANDO{" "}
+              {totalGroups > 0 ? (
+                <b className="font-bold">
+                  {monitoredGroups} de {totalGroups} grupos
+                </b>
+              ) : (
+                <BlindValue why="nenhum grupo importado" />
+              )}
+            </span>
+            <span className={nothingAnalyzed ? "text-v2-warn" : "text-v2-ink-3"}>
+              {analyzed7d.toLocaleString("pt-BR")} MENSAGENS ANALISADAS EM 7D
+            </span>
+            {blind && (
+              <Link to="/rede" className="text-[11px] font-semibold text-v2-green">
+                revisar escuta →
+              </Link>
+            )}
+          </div>
+        )}
+
+        {blind && (
+          <div className="mt-3 rounded-xl border border-v2-warn-strong/40 bg-v2-warn-bg/50 px-4 py-3">
+            <div className="text-[13px] font-[650] text-v2-ink">
+              {deafWhatsapp
+                ? "Nenhum grupo de WhatsApp monitorado"
+                : "Nenhuma mensagem analisada nos últimos 7 dias"}
+            </div>
+            <p className="mt-1 max-w-[680px] text-[12.5px] leading-normal text-v2-ink-2">
+              {deafWhatsapp
+                ? "Temas, território e sinais desta tela dependem das mensagens dos grupos monitorados. Enquanto não houver nenhum, os blocos abaixo aparecem vazios por falta de coleta — não por ausência de movimento na cidade."
+                : "A coleta existe, mas nada foi analisado no período. Os blocos abaixo estão vazios por falta de análise, não por calmaria."}
+            </p>
+            <Link to="/rede" className={`${BLIND_ACTION_CLASS} mt-2.5`}>
+              {deafWhatsapp ? "Ativar grupos monitorados" : "Conferir fontes e grupos"}
+            </Link>
+          </div>
+        )}
+
         {isError && (
           <div className="mt-2 text-[12.5px] text-v2-crit">
             Não foi possível carregar o painel. Tente novamente.
@@ -238,14 +302,26 @@ function Painel() {
               </>
             ) : (
               <>
-                <span className="rounded bg-v2-green-tint px-2.5 py-1 font-mono text-[10.5px] font-bold tracking-[0.08em] text-v2-green">
-                  TRANQUILO
+                {/* "TRANQUILO" é um veredito. Sem escuta ativa não temos direito a ele — o selo
+                    vira "SEM LEITURA", que é o que de fato sabemos. */}
+                <span
+                  className={`rounded px-2.5 py-1 font-mono text-[10.5px] font-bold tracking-[0.08em] ${
+                    blind ? "bg-v2-obs-bg text-v2-faint" : "bg-v2-green-tint text-v2-green"
+                  }`}
+                >
+                  {blind ? "SEM LEITURA" : "TRANQUILO"}
                 </span>
                 <h2 className="mt-3 text-[21px] font-semibold tracking-tight text-v2-ink">
-                  {isLoading ? "Carregando…" : "Nenhum alerta crítico no momento"}
+                  {isLoading
+                    ? "Carregando…"
+                    : blind
+                      ? "Não há dado suficiente para dizer se está tranquilo"
+                      : "Nenhum alerta crítico no momento"}
                 </h2>
                 <p className="mt-1.5 text-[14px] leading-relaxed text-v2-ink-2">
-                  Assim que a IA detectar um assunto que precise de atenção, ele aparece aqui.
+                  {blind
+                    ? "A detecção de alertas roda em cima das mensagens coletadas. Sem coleta no período, a ausência de alerta não diz nada sobre a cidade."
+                    : "Assim que a IA detectar um assunto que precise de atenção, ele aparece aqui."}
                 </p>
               </>
             )}
@@ -282,14 +358,21 @@ function Painel() {
               </span>
             </div>
           ) : (
-            !isLoading && (
+            // Insight de IA em caixa verde afirma "olhei e está bem". Sem coleta, é caixa neutra
+            // dizendo que não olhamos.
+            !isLoading &&
+            (blind ? (
+              <div className="flex items-center gap-3 rounded-xl border border-v2-line bg-v2-card px-4 py-3.5">
+                <BlindValue why="sem base para apontar tema em alta" />
+              </div>
+            ) : (
               <div className="flex items-center gap-3 rounded-xl border border-v2-green-border bg-v2-green-tint px-4 py-3.5">
                 <span className="text-[14px]">✦</span>
                 <span className="flex-1 text-[12.5px] leading-snug text-v2-green-ink">
                   Sem temas identificados nos últimos 7 dias.
                 </span>
               </div>
-            )
+            ))
           )}
         </div>
       </div>
@@ -303,9 +386,17 @@ function Painel() {
           <div className="rounded-xl border border-v2-line bg-v2-card p-[18px]">
             <div className="flex flex-col gap-3">
               {isLoading && <span className="text-[12.5px] text-v2-ink-3">Carregando…</span>}
+              {/* Lista vazia com análise rodando = a IA leu e não achou tema (afirmação).
+                  Lista vazia sem análise = não leu nada (ausência). Não são a mesma frase. */}
               {!isLoading && themeItems.length === 0 && (
-                <span className="text-[12.5px] text-v2-faint">
-                  Nenhum tema identificado nos últimos 7 dias.
+                <span className="text-[12.5px]">
+                  {nothingAnalyzed ? (
+                    <BlindValue why="nenhuma mensagem analisada em 7d" />
+                  ) : (
+                    <span className="text-v2-faint">
+                      Nenhum tema identificado nos últimos 7 dias.
+                    </span>
+                  )}
                 </span>
               )}
               {themeItems.map((t) => (
@@ -335,14 +426,32 @@ function Painel() {
             <div className="flex flex-col gap-2">
               {isLoading && <span className="text-[12.5px] text-v2-ink-3">Carregando…</span>}
               {!isLoading && zoneItems.length === 0 && (
-                <span className="text-[12.5px] text-v2-faint">
-                  Sem dados territoriais nos últimos 7 dias.
+                <span className="text-[12.5px]">
+                  {blind ? (
+                    <BlindValue
+                      why={
+                        deafWhatsapp ? "nenhum grupo monitorado" : "nada analisado nos últimos 7d"
+                      }
+                    />
+                  ) : (
+                    <span className="text-v2-faint">
+                      Sem dados territoriais nos últimos 7 dias.
+                    </span>
+                  )}
                 </span>
               )}
               {zoneItems.map((z) => (
                 <ZoneBar key={z.label} label={z.label} pct={z.pct} tone={z.tone} />
               ))}
             </div>
+            {/* O bloco lista os bairros CITADOS pelos temas — não a cidade. Bairro ausente aqui
+                pode simplesmente nunca ter sido escutado; o mapa é quem detalha isso. */}
+            {zoneItems.length > 0 && (
+              <BlindNote className="mt-2.5">
+                Só bairros citados nos temas de 7d. Bairros sem escuta não aparecem — veja a
+                cobertura no mapa.
+              </BlindNote>
+            )}
           </div>
         </div>
 
@@ -353,7 +462,15 @@ function Painel() {
           <div className="rounded-xl border border-v2-line bg-v2-card px-[18px] py-2">
             {isLoading && <div className="py-2.5 text-[12.5px] text-v2-ink-3">Carregando…</div>}
             {!isLoading && signalItems.length === 0 && (
-              <div className="py-2.5 text-[12.5px] text-v2-faint">Nenhum sinal recente.</div>
+              <div className="py-2.5 text-[12.5px]">
+                {blind ? (
+                  <BlindValue
+                    why={deafWhatsapp ? "nenhum grupo monitorado" : "nada analisado em 7d"}
+                  />
+                ) : (
+                  <span className="text-v2-faint">Nenhum sinal recente.</span>
+                )}
+              </div>
             )}
             {signalItems.map((s, i) => (
               <SignalRow

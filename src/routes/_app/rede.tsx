@@ -14,6 +14,7 @@ import { listVocabulary } from "@/lib/vocabulary.functions";
 import { fetchAllPages } from "@/lib/pg-paginate";
 import { PersonSheet } from "@/components/v2/person-sheet";
 import { STANCE_TONE, STANCES, initialsOfName, type Stance } from "@/components/v2/person-shared";
+import { BlindNote, BlindValue } from "@/components/v2/empty-signal";
 
 export const Route = createFileRoute("/_app/rede")({
   head: () => ({ meta: [{ title: "Rede — Inpol v2" }] }),
@@ -142,7 +143,7 @@ function Screen() {
           </button>
         ))}
         <Link
-          to="/ajustes/fontes"
+          to="/ajustes/escuta/imprensa"
           className="whitespace-nowrap px-3.5 pt-2 pb-2.5 text-[13.5px] font-semibold text-v2-ink-3"
         >
           📡 Fontes <span className="text-v2-faint">{fontesCount}</span>
@@ -520,6 +521,14 @@ function TabPessoas({
         ))}
       </div>
 
+      {/* A tabela mistura métrica medida e métrica impossível de medir; a legenda ensina a
+          diferença uma vez, para o `—` não ser lido como "zero bonitinho". */}
+      <BlindNote className="mt-2">
+        <b className="font-[650]">0</b> = houve monitoramento e o resultado foi zero.{" "}
+        <b className="font-[650]">—</b> = não há como saber (sem vínculo de WhatsApp, sem ficha de
+        adversário ou sem @ cadastrado).
+      </BlindNote>
+
       {topActive && (
         <AiHint>
           <b>{topActive.person.display_name}</b> é quem concentra mais atividade mapeada no momento
@@ -558,7 +567,7 @@ function TabPessoas({
                   ? `⚠ ${t.last_status}`
                   : t.last_scanned_at
                     ? `● ok · último scan ${new Date(t.last_scanned_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-                    : "○ aguardando primeiro scan";
+                    : "○ nunca varrido";
               return (
                 <InstaHandle
                   key={t.id}
@@ -594,7 +603,13 @@ function InstaHandle({
     <div className={`px-5 py-3.5 ${border ? "md:border-r md:border-v2-track" : ""}`}>
       <div className="font-mono text-[12.5px] font-bold text-v2-ink">{handle}</div>
       <div className="mt-0.5 text-[11.5px] text-v2-ink-3">{meta}</div>
-      <div className={`mt-1.5 font-mono text-[10px] ${ok ? "text-v2-green" : "text-v2-crit"}`}>
+      {/* Três estados, não dois: varrido ok (verde), erro de varredura (vermelho) e
+          nunca varrido (cinza) — este último é ausência de leitura, não falha. */}
+      <div
+        className={`mt-1.5 font-mono text-[10px] ${
+          ok ? "text-v2-green" : status.startsWith("○") ? "text-v2-faint" : "text-v2-crit"
+        }`}
+      >
         {status}
       </div>
     </div>
@@ -629,9 +644,12 @@ function PersonRowLine({
   const waCount = person.whatsapp_count;
   const unmonitored = !igKnown && waCount === 0;
 
+  // O motivo do sentimento vazio muda tudo: sem vínculo ninguém mediu; com vínculo e zero
+  // mensagem, medimos e não houve o que pontuar.
+  const sentimentWhy = msgs == null ? "sem vínculo de WhatsApp" : "sem mensagem no período";
   const sentimentLabel =
     sentiment == null
-      ? "— sem dados"
+      ? null
       : `${sentiment >= 0 ? "+" : "−"}${Math.abs(sentiment).toFixed(2)} ${
           sentiment > 0.05 ? "▲" : sentiment < -0.05 ? "▼" : "—"
         }`;
@@ -723,12 +741,12 @@ function PersonRowLine({
         <span
           className={`pointer-events-none relative z-[1] font-mono text-[12px] ${msgs == null ? "text-v2-faint" : "text-v2-ink"}`}
         >
-          {msgs == null ? "—" : msgs}
+          {msgs == null ? <BlindValue why="sem vínculo de WhatsApp" showWhy={false} /> : msgs}
         </span>
         <span
           className={`pointer-events-none relative z-[1] font-mono text-[12px] ${sentimentTone}`}
         >
-          {sentimentLabel}
+          {sentimentLabel ?? <BlindValue why={sentimentWhy} />}
         </span>
 
         {/* Score só existe para quem tem ficha em org_adversaries; para os demais, um traço
@@ -930,7 +948,7 @@ function TabGrupos({ orgId }: { orgId: string }) {
             initials={(g.subject ?? "?").slice(0, 2).toUpperCase()}
             avatarTone={g.is_monitored ? "green" : "neutral"}
             name={g.subject ?? "Sem nome"}
-            members={`${g.participant_count ?? 0} participantes`}
+            members={g.participant_count}
             bairro={
               g.neighborhood_tag ? (
                 <span className="text-[12.5px] text-v2-ink">📍 {g.neighborhood_tag}</span>
@@ -951,6 +969,11 @@ function TabGrupos({ orgId }: { orgId: string }) {
           />
         ))}
       </div>
+
+      <BlindNote className="mt-2">
+        MSGS 7D aparece como <b className="font-[650]">—</b> para todos os grupos: o volume por
+        grupo não é armazenado. Grupo sem bairro vinculado é escutado, mas não entra no Território.
+      </BlindNote>
     </div>
   );
 }
@@ -971,7 +994,8 @@ function GroupRow({
   initials: string;
   avatarTone: string;
   name: string;
-  members: string;
+  /** `null` = a Evolution não devolveu a contagem; "0 participantes" seria um grupo vazio. */
+  members: number | null;
   bairro: React.ReactNode;
   tags: string[];
   on: boolean;
@@ -992,7 +1016,13 @@ function GroupRow({
         </span>
         <div className="min-w-0">
           <div className="text-[13.5px] font-semibold text-v2-ink">{name}</div>
-          <div className="font-mono text-[10.5px] text-v2-faint">{members}</div>
+          <div className="font-mono text-[10.5px] text-v2-faint">
+            {members == null ? (
+              <BlindValue why="participantes não sincronizados" />
+            ) : (
+              `${members} participantes`
+            )}
+          </div>
         </div>
       </div>
       {bairro}
@@ -1007,8 +1037,10 @@ function GroupRow({
         ))}
       </div>
       {/* MSGS 7D não tem correspondência no schema (whatsapp_groups não guarda contagem
-          de mensagens) — estado vazio honesto em vez de número inventado. */}
-      <span className="font-mono text-[12px] text-v2-faint">—</span>
+          de mensagens) — `—` com motivo, nunca um zero que leria como "grupo parado". */}
+      <span className="font-mono text-[12px]">
+        <BlindValue why="volume por grupo não é medido" showWhy={false} />
+      </span>
       <div className="text-right">
         <Toggle on={on} onChange={onToggle} />
       </div>

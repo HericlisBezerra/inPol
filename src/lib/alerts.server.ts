@@ -25,6 +25,18 @@ interface Bucket {
 
 const WINDOW_HOURS = 72;
 
+const STAGE_RANK: Record<Stage, number> = { borbulhando: 0, ativo: 1, manchete: 2 };
+const LEVEL_RANK: Record<Level, number> = { amarelo: 0, laranja: 1, vermelho: 2 };
+
+// Depois que o gabinete resolve um assunto, ele só pode virar alerta de novo passado
+// esse período. Sem isso o cron (que roda muito mais rápido que a janela de 72h)
+// recria em minutos exatamente o que a pessoa acabou de fechar — e o alerta resolvido
+// deixa de significar qualquer coisa.
+const RESOLVED_COOLDOWN_HOURS = 24;
+
+// Teto de evidências por alerta: a coluna é um array, não uma tabela filha.
+const MAX_EVIDENCE = 50;
+
 function stageOf(b: Bucket): Stage {
   if (b.hasPressOrSocial) return "manchete";
   if (b.messageIds.length >= 8) return "ativo";
@@ -39,8 +51,118 @@ function levelOf(b: Bucket): Level {
   return "amarelo";
 }
 
+/**
+ * Normaliza um pedaço da chave de deduplicação.
+ *
+ * Tema e bairro vêm da IA em texto livre: "Jardim Morada", "jardim  morada" e
+ * "Jardim Morada " são o MESMO assunto, mas `toLowerCase()` sozinho gerava três
+ * chaves distintas — e três alertas. Acento idem ("Vianelo"/"Vianêlo"). Aqui a
+ * saída é sempre `[a-z0-9_]`, então a chave é estável entre execuções.
+ */
+function normalizeKeyPart(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/**
+ * Chave determinística do assunto: `tema::bairro`, com `-` quando não há bairro.
+ * Nunca retorna vazio/NULL — alerta sem chave é alerta que nunca deduplica, que
+ * foi como a org piloto acumulou centenas de linhas do mesmo tema.
+ */
 function dedupeKey(topic: string, neighborhood: string | null): string {
-  return `${topic}::${neighborhood ?? "-"}`.toLowerCase().slice(0, 200);
+  const t = normalizeKeyPart(topic) || "sem_tema";
+  const n = normalizeKeyPart(neighborhood) || "-";
+  return `${t}::${n}`.slice(0, 200);
+}
+
+function highestOf<T extends string>(rank: Record<T, number>, a: T, b: T): T {
+  return rank[a] >= rank[b] ? a : b;
+}
+
+interface OpenAlertRow {
+  id: string;
+  topic: string | null;
+  neighborhood: string | null;
+  level: Level;
+  stage: Stage;
+  max_risk: number | null;
+  first_seen_at: string;
+  recommended_action: string | null;
+  evidence_message_ids: string[] | null;
+}
+
+/**
+ * Carrega os alertas ABERTOS da org agrupados pela chave **recalculada** a partir
+ * de tema+bairro — de propósito não confiamos na coluna `dedupe_key`: é ela que
+ * está nula no passivo. Recalcular faz a consolidação funcionar retroativamente
+ * (adota o que nasceu sem chave) e ser idempotente se a normalização mudar de novo.
+ *
+ * Uma query paginada por execução, em vez de um SELECT por bucket dentro do laço.
+ */
+async function loadOpenAlertsByKey(orgId: string): Promise<Map<string, OpenAlertRow[]>> {
+  const rows = (await fetchAllPages((from, to) =>
+    supabaseAdmin
+      .from("alerts")
+      .select(
+        "id, topic, neighborhood, level, stage, max_risk, first_seen_at, recommended_action, evidence_message_ids",
+      )
+      .eq("org_id", orgId)
+      .is("resolved_at", null)
+      .order("id", { ascending: true })
+      .range(from, to),
+  )) as unknown as OpenAlertRow[];
+
+  const byKey = new Map<string, OpenAlertRow[]>();
+  for (const r of rows) {
+    const key = dedupeKey(r.topic ?? "", r.neighborhood);
+    const list = byKey.get(key);
+    if (list) list.push(r);
+    else byKey.set(key, [r]);
+  }
+  // O sobrevivente de cada chave é o mais antigo: preserva a data real em que o
+  // assunto apareceu (e o `recommended_action` que o gabinete já pode ter lido).
+  for (const list of byKey.values()) {
+    list.sort((a, b) => a.first_seen_at.localeCompare(b.first_seen_at));
+  }
+  return byKey;
+}
+
+/** Chaves cujo ciclo foi encerrado há pouco — ver `RESOLVED_COOLDOWN_HOURS`. */
+async function loadCooldownKeys(orgId: string): Promise<Set<string>> {
+  const since = new Date(Date.now() - RESOLVED_COOLDOWN_HOURS * 60 * 60 * 1000).toISOString();
+  const rows = (await fetchAllPages((from, to) =>
+    supabaseAdmin
+      .from("alerts")
+      .select("topic, neighborhood")
+      .eq("org_id", orgId)
+      .gte("resolved_at", since)
+      .order("id", { ascending: true })
+      .range(from, to),
+  )) as unknown as Array<{ topic: string | null; neighborhood: string | null }>;
+  return new Set(rows.map((r) => dedupeKey(r.topic ?? "", r.neighborhood)));
+}
+
+/**
+ * Evidência nova primeiro (é o que justifica o alerta AGORA), histórico preenchendo
+ * o resto até o teto — consolidar não pode significar apagar o rastro do início do
+ * ciclo nem o das linhas absorvidas.
+ */
+function mergeEvidence(...lists: Array<string[] | null | undefined>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const list of lists) {
+    for (const id of list ?? []) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+      if (out.length >= MAX_EVIDENCE) return out;
+    }
+  }
+  return out;
 }
 
 async function generateAction(bucket: Bucket): Promise<string> {
@@ -73,6 +195,7 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
   scanned: number;
   buckets: number;
   upserted: number;
+  consolidated: number;
 }> {
   const since = new Date(Date.now() - WINDOW_HOURS * 60 * 60 * 1000).toISOString();
 
@@ -150,27 +273,51 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
     if (r.summary && b.sampleSummaries.length < 12) b.sampleSummaries.push(r.summary);
   }
 
+  // Estado dos alertas já existentes, lido UMA vez por execução (não por bucket).
+  const openByKey = await loadOpenAlertsByKey(orgId);
+  const cooldownKeys = await loadCooldownKeys(orgId);
+
   let upserted = 0;
+  let consolidated = 0;
   for (const [key, b] of buckets) {
     // Minimum viable signal: external press/social can raise an alert with fewer items;
     // group-only signals still need volume or multiple groups.
     if (!b.hasPressOrSocial && b.messageIds.length < 3 && b.groupIds.size < 2) continue;
+
+    const openForKey = openByKey.get(key) ?? [];
+    const primary = openForKey[0];
+    const dupes = openForKey.slice(1);
+
+    // REGRA DO CICLO: enquanto houver alerta ABERTO da mesma chave, o assunto é o
+    // mesmo evento e o alerta é ATUALIZADO. Depois de resolvido, o assunto voltar é
+    // um evento NOVO — cria-se outro alerta em vez de reabrir, porque reabrir apaga o
+    // registro de que o gabinete tratou aquilo (some a linha do tempo "resolvemos em X,
+    // voltou em Y"). O cooldown evita que "novo ciclo" vire "recriado 20min depois".
+    if (!primary && cooldownKeys.has(key)) continue;
 
     const stage = stageOf(b);
     const level = levelOf(b);
     const avgSent = b.sentiments.reduce((a, c) => a + c, 0) / Math.max(1, b.sentiments.length);
     const maxRisk = b.risks.reduce((a, c) => Math.max(a, c), 0);
 
-    // Look for existing OPEN alert with same dedupe key
-    const { data: existing } = await supabaseAdmin
-      .from("alerts")
-      .select("id, recommended_action")
-      .eq("org_id", orgId)
-      .eq("dedupe_key", key)
-      .is("resolved_at", null)
-      .maybeSingle();
+    // Passivo: alertas do mesmo assunto que nasceram sem `dedupe_key` e viraram
+    // linhas separadas na tela. As evidências vão para o sobrevivente e as demais
+    // linhas são encerradas — encerrar, não deletar: `resolved_at` é reversível e
+    // preserva o histórico. Gravar a chave junto é seguro porque o índice único é
+    // parcial (`WHERE dedupe_key IS NOT NULL AND resolved_at IS NULL`).
+    if (dupes.length > 0) {
+      const nowIso = new Date().toISOString();
+      await supabaseAdmin
+        .from("alerts")
+        .update({ resolved_at: nowIso, dedupe_key: key })
+        .in(
+          "id",
+          dupes.map((d) => d.id),
+        );
+      consolidated += dupes.length;
+    }
 
-    const action = existing?.recommended_action ?? (await generateAction(b));
+    const action = primary?.recommended_action ?? (await generateAction(b));
 
     const sources = Object.entries(b.sourceCounts)
       .sort((a, b2) => b2[1] - a[1])
@@ -184,34 +331,63 @@ export async function detectAlertsForOrg(orgId: string): Promise<{
 
     const payload = {
       org_id: orgId,
-      level,
-      stage,
+      // Nível e estágio não DESCEM dentro de um ciclo aberto: o que já foi vermelho e
+      // ainda não foi tratado não pode virar amarelo sozinho só porque a janela de 72h
+      // esfriou. Para descer, o gabinete resolve — e o próximo ciclo recomeça do zero.
+      level: primary ? highestOf(LEVEL_RANK, primary.level, level) : level,
+      stage: primary ? highestOf(STAGE_RANK, primary.stage, stage) : stage,
       topic: b.topic,
       neighborhood: b.neighborhood,
       summary,
       recommended_action: action,
-      evidence_message_ids: b.messageIds.slice(0, 50),
+      evidence_message_ids: mergeEvidence(
+        b.messageIds,
+        primary?.evidence_message_ids,
+        ...dupes.map((d) => d.evidence_message_ids),
+      ),
       dedupe_key: key,
-      first_seen_at: b.firstSeen,
+      // `first_seen_at` é o início do ciclo, não o início da janela: sem o `min` o
+      // alerta rejuvenescia a cada execução e a idade do problema sumia da tela.
+      first_seen_at:
+        primary && primary.first_seen_at < b.firstSeen ? primary.first_seen_at : b.firstSeen,
       last_seen_at: b.lastSeen,
+      // `message_count` fica sendo o volume da janela (é o "quão quente está agora");
+      // `max_risk` é o pior já visto no ciclo, que é o que não pode ser esquecido.
       message_count: b.messageIds.length,
       avg_sentiment: Number(avgSent.toFixed(3)),
-      max_risk: maxRisk,
+      max_risk: Math.max(maxRisk, primary?.max_risk ?? 0),
     };
 
-    if (existing) {
-      await supabaseAdmin.from("alerts").update(payload).eq("id", existing.id);
+    if (primary) {
+      await supabaseAdmin.from("alerts").update(payload).eq("id", primary.id);
     } else {
-      await supabaseAdmin.from("alerts").insert(payload);
+      const { error } = await supabaseAdmin.from("alerts").insert(payload);
+      // `detectAlertsForOrg` roda pelo cron E pela geração de relatório: duas execuções
+      // simultâneas colidem no índice único. O certo aí é atualizar quem chegou primeiro,
+      // não estourar a detecção da org inteira por causa de um bucket.
+      if (error) {
+        await supabaseAdmin
+          .from("alerts")
+          .update(payload)
+          .eq("org_id", orgId)
+          .eq("dedupe_key", key)
+          .is("resolved_at", null);
+      }
     }
     upserted++;
   }
 
-  return { scanned: rows.length, buckets: buckets.size, upserted };
+  return { scanned: rows.length, buckets: buckets.size, upserted, consolidated };
 }
 
 export async function detectAlertsAllOrgs(): Promise<
-  Array<{ org_id: string; scanned?: number; upserted?: number; error?: string }>
+  Array<{
+    org_id: string;
+    scanned?: number;
+    upserted?: number;
+    consolidated?: number;
+    error?: string;
+  }>
 > {
   // Cron de todas as orgs: paginado porque "todas" tem que ser todas mesmo — uma org
   // fora da primeira página ficaria sem detecção para sempre, e em silêncio.
@@ -224,12 +400,22 @@ export async function detectAlertsAllOrgs(): Promise<
       .range(from, to),
   );
 
-  const results: Array<{ org_id: string; scanned?: number; upserted?: number; error?: string }> =
-    [];
+  const results: Array<{
+    org_id: string;
+    scanned?: number;
+    upserted?: number;
+    consolidated?: number;
+    error?: string;
+  }> = [];
   for (const o of orgs) {
     try {
       const r = await detectAlertsForOrg(o.id);
-      results.push({ org_id: o.id, scanned: r.scanned, upserted: r.upserted });
+      results.push({
+        org_id: o.id,
+        scanned: r.scanned,
+        upserted: r.upserted,
+        consolidated: r.consolidated,
+      });
     } catch (e) {
       results.push({ org_id: o.id, error: e instanceof Error ? e.message : String(e) });
     }

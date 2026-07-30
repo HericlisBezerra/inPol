@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getAlert, acknowledgeAlert } from "@/lib/dashboard.functions";
 import { resolveAlert } from "@/lib/alerts.functions";
+import { casoIdFor } from "@/lib/casos.functions";
 import { useCurrentOrg } from "@/lib/use-current-org";
 
 export const Route = createFileRoute("/_app/alertas/$alertId")({
@@ -173,6 +174,19 @@ function AlertaDetalhe() {
             {evidenceCount > 0 && <span>💬 {evidenceCount} msgs</span>}
             <span>desde {format(new Date(alert.created_at), "EEE HH:mm", { locale: ptBR })}</span>
           </div>
+
+          {/* Este alerta é um instante de um acontecimento maior (tema × bairro). O link
+              leva ao dossiê inteiro — linha do tempo, evidência, território, propagação. */}
+          <Link
+            to="/casos/$casoId"
+            params={{ casoId: casoIdFor(alert.topic, alert.neighborhood) }}
+            className="mt-3.5 inline-flex items-center gap-2 rounded-lg border border-v2-green-border bg-v2-green-tint px-3.5 py-2 text-[13px] font-[650] text-v2-green-ink hover:border-v2-green"
+          >
+            🗂️ Abrir o caso completo
+            <span className="font-mono text-[11px] text-v2-green">
+              histórico, evidência e propagação
+            </span>
+          </Link>
         </div>
 
         <div className="w-full flex-none rounded-xl border border-v2-line bg-v2-card px-[18px] py-4 md:w-[250px]">

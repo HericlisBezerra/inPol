@@ -1,9 +1,17 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getTerritoryStats } from "@/lib/territory.functions";
+import { listVocabulary } from "@/lib/vocabulary.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrg } from "@/lib/use-current-org";
 import { JundiaiMap, type MapBairro } from "@/components/v2/jundiai-map";
+import {
+  BLIND_ACTION_CLASS,
+  BlindNote,
+  BlindPanel,
+  BlindValue,
+} from "@/components/v2/empty-signal";
 
 export const Route = createFileRoute("/_app/territorio")({
   head: () => ({ meta: [{ title: "Território — Inpol v2" }] }),
@@ -47,6 +55,20 @@ const COORDS: Record<string, { lat: number; lng: number }> = {
   Retiro: { lat: -23.215, lng: -46.87 },
 };
 
+/**
+ * O vocabulário é digitado à mão e a IA devolve o bairro como apareceu na mensagem — "Vila Arens"
+ * e "vila arens" são o mesmo lugar. Comparar sem normalizar faria bairro monitorado aparecer como
+ * ponto cego, que é justamente a leitura errada que esta tela existe para evitar.
+ */
+function normalizePlace(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function toneForApproval(approval: number): Tone {
   if (approval >= 60) return "green";
   if (approval >= 40) return "flat";
@@ -75,10 +97,78 @@ function Screen() {
     enabled: !!orgId,
   });
 
-  const items: Item[] = data?.items ?? [];
+  // O ranking só enxerga bairro que APARECEU em mensagem. Sem saber quais bairros a org
+  // declarou monitorar (vocabulário) e onde existe grupo de WhatsApp escutando, a tela não
+  // consegue distinguir "esse bairro está quieto" de "esse bairro nunca foi escutado" — que é
+  // exatamente o erro que faz um gabinete achar que uma região está tranquila.
+  const { data: vocab = [] } = useQuery({
+    queryKey: ["vocab", orgId],
+    enabled: !!orgId,
+    queryFn: () => listVocabulary({ data: { orgId: orgId as string } }),
+  });
+
+  const { data: groups = [] } = useQuery({
+    queryKey: ["territorio-grupos", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const { data: rows } = await supabase
+        .from("whatsapp_groups")
+        .select("id, subject, neighborhood_tag, is_monitored")
+        .eq("org_id", orgId!);
+      return rows ?? [];
+    },
+  });
+
+  // Memoizado porque alimenta o cálculo de cobertura: recriar o array a cada render refazia a
+  // varredura de bairros sem necessidade.
+  const items: Item[] = useMemo(() => data?.items ?? [], [data]);
   const known = items.filter((it) => COORDS[it.name]);
   const unknown = items.filter((it) => !COORDS[it.name]);
   const unlinked = unknown.filter((u) => !links[u.name]);
+
+  /**
+   * Cobertura da escuta. O universo de bairros é o vocabulário da org (o que ela declarou querer
+   * monitorar) somado aos bairros que o mapa conhece — se um deles não aparece no ranking, isso
+   * tem DOIS significados opostos e a tela precisa separá-los:
+   *   • tem grupo monitorado vinculado → `0` mensagens no período (silêncio observado, é notícia)
+   *   • não tem grupo nenhum          → `—` não escutamos (o sistema é cego ali)
+   */
+  const coverage = useMemo(() => {
+    const monitoredByPlace = new Map<string, number>();
+    for (const g of groups) {
+      if (!g.is_monitored || !g.neighborhood_tag) continue;
+      const key = normalizePlace(g.neighborhood_tag);
+      if (!key) continue;
+      monitoredByPlace.set(key, (monitoredByPlace.get(key) ?? 0) + 1);
+    }
+
+    const heard = new Set(items.map((it) => normalizePlace(it.name)));
+    const universe = new Map<string, string>(); // normalizado -> nome exibível
+    for (const v of vocab) {
+      if (v.kind !== "neighborhood") continue;
+      const name = (v.value ?? "").trim();
+      if (name) universe.set(normalizePlace(name), name);
+    }
+    for (const name of Object.keys(COORDS)) universe.set(normalizePlace(name), name);
+
+    const silentMonitored: string[] = [];
+    const blind: string[] = [];
+    for (const [key, name] of universe) {
+      if (heard.has(key)) continue;
+      if (monitoredByPlace.has(key)) silentMonitored.push(name);
+      else blind.push(name);
+    }
+    const collate = (a: string, b: string) => a.localeCompare(b, "pt-BR");
+    return {
+      heardCount: items.length,
+      silentMonitored: silentMonitored.sort(collate),
+      blind: blind.sort(collate),
+      // Grupo monitorado sem bairro vinculado escuta mensagem mas não sabe DE ONDE ela veio:
+      // o volume entra nos temas e some do mapa. É um ponto cego que ninguém vê acontecer.
+      groupsWithoutPlace: groups.filter((g) => g.is_monitored && !g.neighborhood_tag).length,
+      monitoredGroups: groups.filter((g) => g.is_monitored).length,
+    };
+  }, [groups, items, vocab]);
 
   const mapBairros = useMemo<MapBairro[]>(() => {
     const base: MapBairro[] = known.map((b) => ({
@@ -158,14 +248,23 @@ function Screen() {
       )}
 
       {!isLoading && !isError && items.length === 0 ? (
+        // Nenhum bairro no ranking tem duas causas opostas. Com grupo monitorado, o período
+        // realmente foi vazio; sem grupo, não houve escuta nenhuma — e prometer "aguarde novas
+        // análises" nesse caso é mandar o gabinete esperar por algo que nunca vai chegar.
         <div className="mt-[22px] rounded-[13px] border border-v2-line bg-v2-card px-6 py-10 text-center">
           <div className="text-[13.5px] font-[650] text-v2-ink">
-            Ainda sem mensagens com bairro classificado
+            {coverage.monitoredGroups === 0
+              ? "Nenhum bairro está sendo escutado"
+              : "Nenhuma mensagem com bairro classificado no período"}
           </div>
-          <p className="mx-auto mt-1.5 max-w-[420px] text-[12.5px] leading-normal text-v2-ink-3">
-            Cadastre bairros no Vocabulário (Ajustes) e aguarde novas análises para ver o mapa e o
-            ranking de aprovação por região.
+          <p className="mx-auto mt-1.5 max-w-[460px] text-[12.5px] leading-normal text-v2-ink-3">
+            {coverage.monitoredGroups === 0
+              ? "Não há grupo de WhatsApp monitorado nesta organização, então o mapa não tem o que mostrar — isto não significa que o território esteja calmo."
+              : `${coverage.monitoredGroups} grupo(s) monitorado(s) e nenhuma mensagem classificada por bairro em ${range}. Cadastre bairros no Vocabulário (Ajustes) para a IA reconhecê-los.`}
           </p>
+          <Link to="/rede" className={`${BLIND_ACTION_CLASS} mt-3`}>
+            Ver grupos monitorados
+          </Link>
         </div>
       ) : (
         <div className="mt-[22px] grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_1fr]">
@@ -186,24 +285,34 @@ function Screen() {
           {/* Right column */}
           <div className="flex flex-col gap-3">
             <div className="flex gap-3">
+              {/* "Melhor/Pior bairro" sem valor não é empate: é ausência de bairro localizável.
+                  O motivo evita a leitura de que a cidade está uniforme. */}
               <StatCard
                 label="Melhor bairro"
-                value={best ? `${best.name} · ${best.approval}%` : "—"}
+                value={best ? `${best.name} · ${best.approval}%` : null}
+                why="nenhum bairro localizado no mapa"
                 tone="green"
               />
               <StatCard
                 label="Pior bairro"
-                value={worst ? `${worst.name} · ${worst.approval}%` : "—"}
+                value={worst ? `${worst.name} · ${worst.approval}%` : null}
+                why="nenhum bairro localizado no mapa"
                 tone="crit"
               />
             </div>
 
             {/* Ranking */}
             <div className="flex-1 rounded-[13px] border border-v2-line bg-v2-card px-[18px] py-4">
-              <div className="mb-3 flex items-baseline justify-between">
+              <div className="mb-1 flex items-baseline justify-between">
                 <span className="text-[14px] font-[650] text-v2-ink">Ranking</span>
                 <span className="font-mono text-[10.5px] text-v2-faint">APROVAÇÃO · MSGS</span>
               </div>
+              {/* Recorte explícito: o ranking é uma lista de quem falou, não da cidade inteira.
+                  Sem isso, um bairro ausente lê como "sem problema" em vez de "sem escuta". */}
+              <BlindNote className="mb-2.5">
+                Só bairros com mensagem classificada no período. Os demais estão em “Cobertura da
+                escuta”, abaixo.
+              </BlindNote>
               <div className="flex flex-col">
                 {isLoading && <span className="py-2 text-[12px] text-v2-ink-3">Carregando…</span>}
                 {!isLoading &&
@@ -237,12 +346,23 @@ function Screen() {
                 <span>✦</span>
                 <span className="flex-1 text-[12.5px] leading-normal text-v2-green-ink">
                   {negatives.map((n) => n.name).join(" e ")} concentram {negativeShare}% das
-                  mensagens do período.
+                  mensagens do período — percentual calculado só sobre bairros com escuta.
                 </span>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {/* Cobertura da escuta — a resposta para "o que este mapa NÃO está me mostrando". */}
+      {!isLoading && !isError && (
+        <CoveragePanel
+          heardCount={coverage.heardCount}
+          silentMonitored={coverage.silentMonitored}
+          blind={coverage.blind}
+          groupsWithoutPlace={coverage.groupsWithoutPlace}
+          range={range}
+        />
       )}
 
       {/* Unknown-to-Maps bairros — link to a known one so they count on the map */}
@@ -266,6 +386,134 @@ function Screen() {
   );
 }
 
+/**
+ * Cobertura da escuta: o painel que responde "quais bairros este mapa não me mostra, e por quê".
+ * Três estados, propositalmente separados — juntá-los é o bug original:
+ *   • com sinal          → o mapa fala por eles
+ *   • monitorado, `0`    → escutamos e o período foi mudo (informação de verdade)
+ *   • sem escuta, `—`    → ponto cego; o número que falta não existe em lugar nenhum
+ */
+function CoveragePanel({
+  heardCount,
+  silentMonitored,
+  blind,
+  groupsWithoutPlace,
+  range,
+}: {
+  heardCount: number;
+  silentMonitored: string[];
+  blind: string[];
+  groupsWithoutPlace: number;
+  range: string;
+}) {
+  if (heardCount === 0 && silentMonitored.length === 0 && blind.length === 0) return null;
+  return (
+    <div className="mt-4 rounded-[13px] border border-v2-line bg-v2-card px-[18px] py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[14px] font-[650] text-v2-ink">Cobertura da escuta</span>
+        <span className="font-mono text-[10.5px] text-v2-faint">
+          BAIRROS DO VOCABULÁRIO + BAIRROS DO MAPA
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <CoverageCell
+          value={`${heardCount}`}
+          valueClass="text-v2-green"
+          label="com sinal no período"
+          hint={`bairros com pelo menos uma mensagem classificada em ${range}`}
+        />
+        <CoverageCell
+          value="0"
+          valueClass="text-v2-ink"
+          label={`${silentMonitored.length} monitorados, sem mensagem`}
+          hint="há grupo escutando: o silêncio aqui é informação real"
+          names={silentMonitored}
+        />
+        <CoverageCell
+          value="—"
+          valueClass="text-v2-faint"
+          label={`${blind.length} sem escuta`}
+          hint="nenhum grupo vinculado: o sistema é cego nestes bairros"
+          names={blind}
+        />
+      </div>
+
+      {blind.length > 0 && (
+        <BlindPanel
+          className="mt-3.5"
+          title={`${blind.length} bairro(s) fora do monitoramento`}
+          action={
+            <Link to="/rede" className={BLIND_ACTION_CLASS}>
+              Vincular grupos a bairros
+            </Link>
+          }
+        >
+          Estes bairros nunca aparecem no mapa nem no ranking porque não há grupo de WhatsApp
+          monitorado vinculado a eles. Qualquer conclusão sobre a cidade inteira — média de
+          aprovação, “bairro mais crítico”, tema regional — exclui esta lista.
+        </BlindPanel>
+      )}
+
+      {groupsWithoutPlace > 0 && (
+        <BlindPanel
+          className="mt-3"
+          title={`${groupsWithoutPlace} grupo(s) monitorado(s) sem bairro vinculado`}
+          action={
+            <Link to="/rede" className={BLIND_ACTION_CLASS}>
+              Vincular bairro aos grupos
+            </Link>
+          }
+        >
+          As mensagens desses grupos entram nos temas e nos alertas, mas não têm origem territorial
+          — some do mapa sem deixar rastro. É volume real que o Território não conta.
+        </BlindPanel>
+      )}
+    </div>
+  );
+}
+
+function CoverageCell({
+  value,
+  valueClass,
+  label,
+  hint,
+  names,
+}: {
+  value: string;
+  valueClass: string;
+  label: string;
+  hint: string;
+  names?: string[];
+}) {
+  return (
+    <div className="rounded-xl border border-v2-line bg-v2-bg/40 px-3.5 py-3">
+      <div className="flex items-baseline gap-2">
+        <span className={`font-mono text-[18px] font-[650] ${valueClass}`}>{value}</span>
+        <span className="text-[12.5px] font-semibold text-v2-ink-2">{label}</span>
+      </div>
+      <BlindNote className="mt-1">{hint}</BlindNote>
+      {names && names.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {names.slice(0, 8).map((n) => (
+            <span
+              key={n}
+              className="rounded-full bg-v2-track px-[9px] py-[3px] text-[11px] text-v2-ink-2"
+            >
+              {n}
+            </span>
+          ))}
+          {names.length > 8 && (
+            <span className="px-1 py-[3px] font-mono text-[11px] text-v2-faint">
+              +{names.length - 8}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UnknownPanel({
   unknown,
   known,
@@ -275,7 +523,6 @@ function UnknownPanel({
   known: Item[];
   onLink: (name: string, target: string) => void;
 }) {
-  if (known.length === 0) return null;
   return (
     <div className="mt-4 rounded-[13px] border border-v2-warn-strong/40 bg-v2-warn-bg/50 px-[18px] py-4">
       <div className="flex items-center gap-2">
@@ -288,8 +535,20 @@ function UnknownPanel({
         Estes bairros foram identificados nas mensagens mas o mapa de Jundiaí não os reconhece (nome
         informal, loteamento novo ou grafia diferente). Vincule cada um a um bairro conhecido para
         as mensagens contarem no território.
+        {known.length === 0 && (
+          <>
+            {" "}
+            <b>
+              Nenhum bairro do período tem coordenada, então o mapa está vazio e não há alvo para
+              vincular — o volume abaixo existe, mas nenhum ponto do mapa o representa.
+            </b>
+          </>
+        )}
       </p>
       <div className="mt-3 flex flex-col gap-2">
+        {/* Antes este painel inteiro sumia quando `known` era vazio — o pior caso possível: 100%
+            das mensagens fora do mapa e nenhuma tela dizendo isso. Agora ele lista mesmo sem
+            destino de vínculo. */}
         {unknown.map((u) => (
           <UnknownRow key={u.name} u={u} known={known} onLink={onLink} />
         ))}
@@ -307,35 +566,41 @@ function UnknownRow({
   known: Item[];
   onLink: (name: string, target: string) => void;
 }) {
-  const [target, setTarget] = useState<string>(known[0].name);
+  const [target, setTarget] = useState<string>(known[0]?.name ?? "");
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-v2-line bg-v2-card px-3.5 py-2.5">
       <span className="rounded bg-v2-warn-bg px-2 py-0.5 font-mono text-[10px] font-bold tracking-[0.08em] text-v2-warn">
-        DESCONHECIDO
+        SEM COORDENADA
       </span>
       <span className="text-[13.5px] font-semibold text-v2-ink">{u.name}</span>
       <span className="font-mono text-[11px] text-v2-faint">
         {u.msgs} msgs · {u.approval}%
       </span>
       <div className="flex-1" />
-      <span className="text-[12px] text-v2-ink-3">Vincular a</span>
-      <select
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-        className="rounded-lg border border-v2-line-strong bg-v2-card px-2.5 py-1.5 text-[12.5px] text-v2-ink outline-none focus:border-v2-green"
-      >
-        {known.map((k) => (
-          <option key={k.name} value={k.name}>
-            {k.name}
-          </option>
-        ))}
-      </select>
-      <button
-        onClick={() => onLink(u.name, target)}
-        className="rounded-lg bg-v2-ink px-3.5 py-1.5 text-[12.5px] font-[650] text-white"
-      >
-        Vincular
-      </button>
+      {known.length === 0 ? (
+        <BlindValue why="sem bairro de destino no período" />
+      ) : (
+        <>
+          <span className="text-[12px] text-v2-ink-3">Vincular a</span>
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            className="rounded-lg border border-v2-line-strong bg-v2-card px-2.5 py-1.5 text-[12.5px] text-v2-ink outline-none focus:border-v2-green"
+          >
+            {known.map((k) => (
+              <option key={k.name} value={k.name}>
+                {k.name}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => onLink(u.name, target)}
+            className="rounded-lg bg-v2-ink px-3.5 py-1.5 text-[12.5px] font-[650] text-white"
+          >
+            Vincular
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -352,17 +617,27 @@ function LegendSwatch({ className, label }: { className: string; label: string }
 function StatCard({
   label,
   value,
+  why,
   tone,
 }: {
   label: string;
-  value: string;
+  /** `null` = não há como saber (sem bairro localizado), nunca "empate". */
+  value: string | null;
+  why: string;
   tone: "green" | "crit";
 }) {
   const color = tone === "green" ? "text-v2-green" : "text-v2-crit";
   return (
     <div className="flex-1 rounded-xl border border-v2-line bg-v2-card px-4 py-3.5">
       <div className="text-[12px] text-v2-ink-3">{label}</div>
-      <div className={`mt-1 text-[17px] font-[650] ${color}`}>{value}</div>
+      {value == null ? (
+        <div className="mt-1 text-[17px] font-[650]">
+          <BlindValue why={why} showWhy={false} />
+          <span className="ml-2 text-[11.5px] font-normal text-v2-faint">{why}</span>
+        </div>
+      ) : (
+        <div className={`mt-1 text-[17px] font-[650] ${color}`}>{value}</div>
+      )}
     </div>
   );
 }

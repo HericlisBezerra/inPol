@@ -185,7 +185,7 @@ function AvatarMenu() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
   const items = [
-    { to: "/ajustes/perfil", label: "Meu perfil" },
+    { to: "/ajustes/acesso/perfil", label: "Meu perfil" },
     { to: "/ajustes", label: "Ajustes" },
     { to: "/eleicao", label: "Modo Eleição" },
     { to: "/admin", label: "Admin da plataforma" },
@@ -212,7 +212,7 @@ function AvatarMenu() {
       {open && (
         <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-xl border border-v2-line bg-v2-surface py-1 shadow-[0_16px_48px_rgba(33,31,28,0.16)]">
           <Link
-            to="/ajustes/perfil"
+            to="/ajustes/acesso/perfil"
             onClick={() => setOpen(false)}
             className="block border-b border-v2-line px-3.5 py-2.5 hover:bg-v2-track"
           >

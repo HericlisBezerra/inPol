@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getNewsFilters, listNewsFeed } from "@/lib/news.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { useCurrentOrg } from "@/lib/use-current-org";
+import { BLIND_ACTION_CLASS, BlindNote, BlindPanel } from "@/components/v2/empty-signal";
 
 export const Route = createFileRoute("/_app/sinais")({
   head: () => ({ meta: [{ title: "Sinais — Inpol v2" }] }),
@@ -47,6 +49,15 @@ const RISK_TONE_CLASS: Record<"crit" | "warn" | "green", string> = {
   green: "text-v2-green",
 };
 
+/** Como cada aba do feed é alimentada — o que precisa existir para ela ter o que mostrar. */
+const SOURCE_REQUIREMENT: Record<Source, string> = {
+  whatsapp: "nenhum grupo de WhatsApp monitorado",
+  news: "nenhum portal de imprensa configurado",
+  instagram: "nenhum perfil de Instagram monitorado",
+  x: "nenhuma fonte de X configurada",
+  facebook: "nenhuma fonte de Facebook configurada",
+};
+
 function Screen() {
   const { orgId } = useCurrentOrg();
   const [filter, setFilter] = useState<Filter>("all");
@@ -78,7 +89,51 @@ function Screen() {
     enabled: !!orgId,
   });
 
-  const vocab = filtersQuery.data ?? [];
+  /**
+   * Quais fontes existem de fato. Sem isto, uma aba vazia é indistinguível de uma aba silenciosa:
+   * o Instagram "morto" com 25 posts era exatamente isso — a tela não sabia dizer se o perfil
+   * estava sem publicar ou se nunca tinha sido cadastrado.
+   */
+  const coverage = useQuery({
+    queryKey: ["sinais-cobertura", orgId],
+    enabled: !!orgId,
+    queryFn: async () => {
+      const [srcRes, groupRes, igRes] = await Promise.all([
+        supabase.from("sources").select("kind, is_active").eq("org_id", orgId!),
+        supabase
+          .from("whatsapp_groups")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", orgId!)
+          .eq("is_monitored", true),
+        supabase
+          .from("org_instagram_targets")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", orgId!)
+          .eq("active", true),
+      ]);
+      const active = new Set(
+        (srcRes.data ?? []).filter((s) => s.is_active).map((s) => s.kind as string),
+      );
+      return {
+        // Instância conectada sem grupo monitorado continua surda: a fonte precisa do alvo.
+        whatsapp: (groupRes.count ?? 0) > 0,
+        news: active.has("news") || active.has("web_search"),
+        instagram: (igRes.count ?? 0) > 0,
+        x: active.has("x"),
+        facebook: active.has("facebook"),
+      } satisfies Record<Source, boolean>;
+    },
+  });
+
+  /** `undefined` enquanto carrega — não afirmamos "sem fonte" antes de saber. */
+  const isConfigured = (s: Source): boolean | undefined =>
+    coverage.data ? coverage.data[s] : undefined;
+  // Só as fontes que têm aba: apontar um ponto cego sem caminho de correção vira ruído.
+  const missingSources = coverage.data
+    ? TABS.map((t) => t.key).filter((k): k is Source => k !== "all" && !coverage.data[k])
+    : [];
+
+  const vocab = useMemo(() => filtersQuery.data ?? [], [filtersQuery.data]);
   const neighborhoods = useMemo(() => vocab.filter((v) => v.kind === "neighborhood"), [vocab]);
   const terms = useMemo(() => vocab.filter((v) => v.kind !== "neighborhood"), [vocab]);
 
@@ -109,19 +164,28 @@ function Screen() {
 
       {/* Filters */}
       <div className="mb-1.5 mt-[18px] flex flex-wrap items-center gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setFilter(t.key)}
-            className={
-              t.key === filter
-                ? "whitespace-nowrap rounded-full bg-v2-ink px-3.5 py-[7px] text-[12.5px] font-[650] text-white"
-                : "whitespace-nowrap rounded-full border border-v2-line bg-v2-card px-3.5 py-[7px] text-[12.5px] font-semibold text-v2-ink-2"
-            }
-          >
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          // Aba sem fonte cadastrada ganha "—" no próprio rótulo: o usuário vê o ponto cego
+          // ANTES de clicar e concluir, do feed vazio, que aquela frente está quieta.
+          const off = t.key !== "all" && isConfigured(t.key) === false;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setFilter(t.key)}
+              title={off ? SOURCE_REQUIREMENT[t.key as Source] : undefined}
+              className={
+                t.key === filter
+                  ? "whitespace-nowrap rounded-full bg-v2-ink px-3.5 py-[7px] text-[12.5px] font-[650] text-white"
+                  : `whitespace-nowrap rounded-full border border-v2-line bg-v2-card px-3.5 py-[7px] text-[12.5px] font-semibold ${
+                      off ? "text-v2-faint" : "text-v2-ink-2"
+                    }`
+              }
+            >
+              {t.label}
+              {off && <span className="ml-1.5 font-mono text-[11px] opacity-80">—</span>}
+            </button>
+          );
+        })}
         <div className="flex-1" />
         <select
           value={neighborhood}
@@ -159,9 +223,29 @@ function Screen() {
         </button>
       </div>
 
-      <div className="mb-1.5 mt-3.5 font-mono text-[10px] font-semibold tracking-[0.1em] text-v2-faint">
+      {/* Cobertura das fontes — o feed é a soma do que escutamos, e essa soma tem buracos
+          nomeáveis. Sem este bloco, "N sinais" passa como se fosse tudo que existiu. */}
+      {missingSources.length > 0 && (
+        <BlindPanel
+          className="mt-3.5"
+          title={`${missingSources.length} frente(s) sem escuta`}
+          action={
+            <Link to="/ajustes/escuta/imprensa" className={BLIND_ACTION_CLASS}>
+              Configurar fontes
+            </Link>
+          }
+        >
+          {missingSources.map((s) => SOURCE_REQUIREMENT[s]).join(" · ")}. Nada dessas frentes entra
+          no feed, nos temas, nos alertas ou nos relatórios.
+        </BlindPanel>
+      )}
+
+      <div className="mb-1 mt-3.5 font-mono text-[10px] font-semibold tracking-[0.1em] text-v2-faint">
         ÚLTIMOS {FEED_DAYS} DIAS · {countLabel} {rows.length === 1 ? "SINAL" : "SINAIS"}
       </div>
+      <BlindNote className="mb-1.5">
+        Contagem do que foi coletado — não do que aconteceu na cidade.
+      </BlindNote>
 
       {feed.isError && (
         <div className="mb-2 text-[12.5px] text-v2-crit">
@@ -174,9 +258,20 @@ function Screen() {
         {feed.isLoading && (
           <div className="px-5 py-4 text-[13px] text-v2-ink-3">Carregando sinais…</div>
         )}
+        {/* Feed vazio: se a fonte selecionada nem existe, isto não é "nada aconteceu" — é
+            "não escutamos". Um portal sem cadastro nunca vai render notícia por mais que se
+            espere, e a tela precisa dizer isso em vez de sugerir paciência. */}
         {!feed.isLoading && rows.length === 0 && (
           <div className="px-5 py-4 text-[13px] text-v2-ink-3">
-            Nenhum sinal encontrado com esses filtros.
+            {filter !== "all" && isConfigured(filter) === false ? (
+              <>
+                <span className="text-v2-faint">—</span>{" "}
+                <b className="font-[650] text-v2-ink">{SOURCE_REQUIREMENT[filter]}.</b> O vazio aqui
+                é falta de escuta, não ausência de movimento.
+              </>
+            ) : (
+              "Nenhum sinal encontrado com esses filtros — houve coleta no período e nada bateu."
+            )}
           </div>
         )}
         {rows.map((row, i) => (

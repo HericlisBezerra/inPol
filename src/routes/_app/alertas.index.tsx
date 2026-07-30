@@ -4,6 +4,7 @@ import { formatDistanceToNowStrict, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { listAlerts } from "@/lib/dashboard.functions";
 import { resolveAlert } from "@/lib/alerts.functions";
+import { casoIdFor } from "@/lib/casos.functions";
 import { useCurrentOrg } from "@/lib/use-current-org";
 
 export const Route = createFileRoute("/_app/alertas/")({
@@ -108,6 +109,14 @@ function Alertas() {
           <span className="whitespace-nowrap font-mono text-[11px] text-v2-ink-3">
             {mostRecent ? agoTime(mostRecent) : ""}
           </span>
+          {/* O alerta é o instante; o caso é a história. Quem chega aqui e quer o
+              contexto inteiro precisa de uma porta visível para a lista de casos. */}
+          <Link
+            to="/casos"
+            className="rounded-lg border border-v2-line-strong bg-v2-card px-3.5 py-2 text-[13px] font-[650] text-v2-ink"
+          >
+            🗂️ Ver casos
+          </Link>
           <button className="rounded-lg border border-v2-line-strong bg-v2-card px-3.5 py-2 text-[13px] font-[650] text-v2-ink">
             ↻ Detectar agora
           </button>
@@ -219,6 +228,13 @@ function FeaturedAlert({ alert, onResolve }: { alert: AlertRow; onResolve: () =>
             >
               Roteiro de ação
             </Link>
+            <Link
+              to="/casos/$casoId"
+              params={{ casoId: casoIdFor(alert.topic, alert.neighborhood) }}
+              className="rounded-lg border border-v2-line-strong bg-v2-card px-4 py-2 text-center text-[13px] font-[650] text-v2-ink"
+            >
+              🗂️ Abrir o caso
+            </Link>
             <button
               onClick={onResolve}
               className="text-center text-[13px] font-[650] text-v2-green"
@@ -283,6 +299,13 @@ function AlertRowItem({
         )}
       </div>
       <div className="flex flex-none items-center gap-2.5">
+        <Link
+          to="/casos/$casoId"
+          params={{ casoId: casoIdFor(alert.topic, alert.neighborhood) }}
+          className="rounded-lg border border-v2-line-strong bg-v2-card px-3.5 py-[7px] text-[13px] font-[650] text-v2-ink"
+        >
+          🗂️ Caso
+        </Link>
         <Link
           to="/alertas/$alertId"
           params={{ alertId: alert.id }}

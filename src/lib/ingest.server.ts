@@ -573,36 +573,22 @@ async function rollupTopicsAndAlerts(
       { onConflict: "org_id,bucket_date,label" },
     );
 
-    // Alert raising: any single message risk_score >= 70 or burst (>= 6 msgs same topic today)
-    const triggers = items.filter((i) => i.risk_score >= 70);
-    if (triggers.length > 0 || newCount >= 6) {
-      const level = triggers.some((t) => t.risk_score >= 85)
-        ? "vermelho"
-        : triggers.length > 0 || newCount >= 10
-          ? "laranja"
-          : "amarelo";
-
-      const trigger = triggers[0] ?? items[items.length - 1];
-      // Avoid duplicate alerts for the same topic today still open
-      const { data: existingOpen } = await supabaseAdmin
-        .from("alerts")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("topic", topic)
-        .gte("created_at", `${today}T00:00:00Z`)
-        .is("acknowledged_at", null)
-        .maybeSingle();
-      if (!existingOpen) {
-        await supabaseAdmin.from("alerts").insert({
-          org_id: orgId,
-          level,
-          topic,
-          neighborhood: trigger.neighborhood,
-          summary: trigger.summary ?? `Movimento em "${topic}" detectado.`,
-          recommended_action: "Revisar amostras e avaliar resposta nas próximas 24h.",
-          evidence_message_ids: items.slice(0, 5).map((i) => i.message_id),
-        });
-      }
-    }
+    // ⚠️ AQUI HAVIA UM SEGUNDO MOTOR DE ALERTAS — removido em 2026-07-29.
+    //
+    // Este bloco inseria alerta direto, sem `dedupe_key`, e com um bug de amplificação:
+    // usava `.maybeSingle()` para checar "já existe alerta aberto deste tema hoje", mas
+    // `.maybeSingle()` com 2+ linhas devolve ERRO e `data = null`. Como o código só olhava
+    // `data`, a partir do segundo alerta aberto do mesmo tema a condição "não existe"
+    // ficava permanentemente verdadeira e TODA execução inseria mais um. Resultado medido
+    // na org piloto: 1.120 alertas, 984 sem chave — 329 só de "outros".
+    //
+    // Não foi remendado, foi removido: dois motores concorrentes escrevendo na mesma
+    // tabela divergem de novo. `detectAlertsForOrg` (alerts.server.ts) é o motor único —
+    // deduplica por `dedupe_key`, consolida em vez de multiplicar, e já roda pelo cron
+    // `detect-alerts` (a cada 30 min) e a cada geração de relatório.
+    //
+    // Custo da remoção: um alerta pode levar até ~30 min para aparecer em vez de surgir
+    // no instante da ingestão. Para um produto que promete antecedência de 72h sobre a
+    // imprensa, é irrelevante — e a tela deixa de ser inutilizável, que era o custo real.
   }
 }

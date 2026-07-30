@@ -26,14 +26,17 @@ import { Route as AppSinaisRouteImport } from './routes/_app/sinais'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
 import { Route as AppRedeRouteImport } from './routes/_app/rede'
 import { Route as AppPainelRouteImport } from './routes/_app/painel'
+import { Route as AppCasosRouteImport } from './routes/_app/casos'
 import { Route as AppCamaraRouteImport } from './routes/_app/camara'
 import { Route as AppAlertasRouteImport } from './routes/_app/alertas'
 import { Route as AppAjustesRouteRouteImport } from './routes/_app/ajustes/route'
 import { Route as AppRelatoriosIndexRouteImport } from './routes/_app/relatorios.index'
+import { Route as AppCasosIndexRouteImport } from './routes/_app/casos.index'
 import { Route as AppCamaraIndexRouteImport } from './routes/_app/camara.index'
 import { Route as AppAlertasIndexRouteImport } from './routes/_app/alertas.index'
 import { Route as AppAjustesIndexRouteImport } from './routes/_app/ajustes/index'
 import { Route as AppRelatoriosReportIdRouteImport } from './routes/_app/relatorios.$reportId'
+import { Route as AppCasosCasoIdRouteImport } from './routes/_app/casos.$casoId'
 import { Route as AppCamaraVereadorIdRouteImport } from './routes/_app/camara.$vereadorId'
 import { Route as AppAlertasAlertIdRouteImport } from './routes/_app/alertas.$alertId'
 import { Route as AppAjustesWhatsappRouteImport } from './routes/_app/ajustes/whatsapp'
@@ -43,6 +46,7 @@ import { Route as AppAjustesNotificacoesRouteImport } from './routes/_app/ajuste
 import { Route as AppAjustesFontesRouteImport } from './routes/_app/ajustes/fontes'
 import { Route as AppAjustesEquipeRouteImport } from './routes/_app/ajustes/equipe'
 import { Route as AppAjustesEleitosRouteImport } from './routes/_app/ajustes/eleitos'
+import { Route as AppAjustesConformidadeRouteImport } from './routes/_app/ajustes/conformidade'
 import { Route as AppAjustesAuditoriaRouteImport } from './routes/_app/ajustes/auditoria'
 import { Route as ApiPublicHooksScanNewsRouteImport } from './routes/api/public/hooks/scan-news'
 import { Route as ApiPublicHooksScanInstagramRouteImport } from './routes/api/public/hooks/scan-instagram'
@@ -51,6 +55,14 @@ import { Route as ApiPublicHooksGenerateReportsRouteImport } from './routes/api/
 import { Route as ApiPublicHooksDetectAlertsRouteImport } from './routes/api/public/hooks/detect-alerts'
 import { Route as ApiPublicHooksBackfillWhatsappRouteImport } from './routes/api/public/hooks/backfill-whatsapp'
 import { Route as ApiPublicHooksAnalyzePendingRouteImport } from './routes/api/public/hooks/analyze-pending'
+import { Route as AppAjustesEscutaWhatsappRouteImport } from './routes/_app/ajustes/escuta.whatsapp'
+import { Route as AppAjustesEscutaInstagramRouteImport } from './routes/_app/ajustes/escuta.instagram'
+import { Route as AppAjustesEscutaImprensaRouteImport } from './routes/_app/ajustes/escuta.imprensa'
+import { Route as AppAjustesCidadeVocabularioRouteImport } from './routes/_app/ajustes/cidade.vocabulario'
+import { Route as AppAjustesCidadeEleitosRouteImport } from './routes/_app/ajustes/cidade.eleitos'
+import { Route as AppAjustesAcessoPerfilRouteImport } from './routes/_app/ajustes/acesso.perfil'
+import { Route as AppAjustesAcessoOrganizacoesRouteImport } from './routes/_app/ajustes/acesso.organizacoes'
+import { Route as AppAjustesAcessoEquipeRouteImport } from './routes/_app/ajustes/acesso.equipe'
 import { Route as ApiPublicEvolutionWebhookTokenRouteImport } from './routes/api/public/evolution.webhook.$token'
 
 const SairRoute = SairRouteImport.update({
@@ -137,6 +149,11 @@ const AppPainelRoute = AppPainelRouteImport.update({
   path: '/painel',
   getParentRoute: () => AppRouteRoute,
 } as any)
+const AppCasosRoute = AppCasosRouteImport.update({
+  id: '/casos',
+  path: '/casos',
+  getParentRoute: () => AppRouteRoute,
+} as any)
 const AppCamaraRoute = AppCamaraRouteImport.update({
   id: '/camara',
   path: '/camara',
@@ -157,6 +174,11 @@ const AppRelatoriosIndexRoute = AppRelatoriosIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRelatoriosRoute,
 } as any)
+const AppCasosIndexRoute = AppCasosIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppCasosRoute,
+} as any)
 const AppCamaraIndexRoute = AppCamaraIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -176,6 +198,11 @@ const AppRelatoriosReportIdRoute = AppRelatoriosReportIdRouteImport.update({
   id: '/$reportId',
   path: '/$reportId',
   getParentRoute: () => AppRelatoriosRoute,
+} as any)
+const AppCasosCasoIdRoute = AppCasosCasoIdRouteImport.update({
+  id: '/$casoId',
+  path: '/$casoId',
+  getParentRoute: () => AppCasosRoute,
 } as any)
 const AppCamaraVereadorIdRoute = AppCamaraVereadorIdRouteImport.update({
   id: '/$vereadorId',
@@ -220,6 +247,11 @@ const AppAjustesEquipeRoute = AppAjustesEquipeRouteImport.update({
 const AppAjustesEleitosRoute = AppAjustesEleitosRouteImport.update({
   id: '/eleitos',
   path: '/eleitos',
+  getParentRoute: () => AppAjustesRouteRoute,
+} as any)
+const AppAjustesConformidadeRoute = AppAjustesConformidadeRouteImport.update({
+  id: '/conformidade',
+  path: '/conformidade',
   getParentRoute: () => AppAjustesRouteRoute,
 } as any)
 const AppAjustesAuditoriaRoute = AppAjustesAuditoriaRouteImport.update({
@@ -268,6 +300,51 @@ const ApiPublicHooksAnalyzePendingRoute =
     path: '/api/public/hooks/analyze-pending',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AppAjustesEscutaWhatsappRoute =
+  AppAjustesEscutaWhatsappRouteImport.update({
+    id: '/escuta/whatsapp',
+    path: '/escuta/whatsapp',
+    getParentRoute: () => AppAjustesRouteRoute,
+  } as any)
+const AppAjustesEscutaInstagramRoute =
+  AppAjustesEscutaInstagramRouteImport.update({
+    id: '/escuta/instagram',
+    path: '/escuta/instagram',
+    getParentRoute: () => AppAjustesRouteRoute,
+  } as any)
+const AppAjustesEscutaImprensaRoute =
+  AppAjustesEscutaImprensaRouteImport.update({
+    id: '/escuta/imprensa',
+    path: '/escuta/imprensa',
+    getParentRoute: () => AppAjustesRouteRoute,
+  } as any)
+const AppAjustesCidadeVocabularioRoute =
+  AppAjustesCidadeVocabularioRouteImport.update({
+    id: '/cidade/vocabulario',
+    path: '/cidade/vocabulario',
+    getParentRoute: () => AppAjustesRouteRoute,
+  } as any)
+const AppAjustesCidadeEleitosRoute = AppAjustesCidadeEleitosRouteImport.update({
+  id: '/cidade/eleitos',
+  path: '/cidade/eleitos',
+  getParentRoute: () => AppAjustesRouteRoute,
+} as any)
+const AppAjustesAcessoPerfilRoute = AppAjustesAcessoPerfilRouteImport.update({
+  id: '/acesso/perfil',
+  path: '/acesso/perfil',
+  getParentRoute: () => AppAjustesRouteRoute,
+} as any)
+const AppAjustesAcessoOrganizacoesRoute =
+  AppAjustesAcessoOrganizacoesRouteImport.update({
+    id: '/acesso/organizacoes',
+    path: '/acesso/organizacoes',
+    getParentRoute: () => AppAjustesRouteRoute,
+  } as any)
+const AppAjustesAcessoEquipeRoute = AppAjustesAcessoEquipeRouteImport.update({
+  id: '/acesso/equipe',
+  path: '/acesso/equipe',
+  getParentRoute: () => AppAjustesRouteRoute,
+} as any)
 const ApiPublicEvolutionWebhookTokenRoute =
   ApiPublicEvolutionWebhookTokenRouteImport.update({
     id: '/api/public/evolution/webhook/$token',
@@ -285,6 +362,7 @@ export interface FileRoutesByFullPath {
   '/ajustes': typeof AppAjustesRouteRouteWithChildren
   '/alertas': typeof AppAlertasRouteWithChildren
   '/camara': typeof AppCamaraRouteWithChildren
+  '/casos': typeof AppCasosRouteWithChildren
   '/painel': typeof AppPainelRoute
   '/rede': typeof AppRedeRoute
   '/relatorios': typeof AppRelatoriosRouteWithChildren
@@ -296,6 +374,7 @@ export interface FileRoutesByFullPath {
   '/site/termos': typeof SiteTermosRoute
   '/site/': typeof SiteIndexRoute
   '/ajustes/auditoria': typeof AppAjustesAuditoriaRoute
+  '/ajustes/conformidade': typeof AppAjustesConformidadeRoute
   '/ajustes/eleitos': typeof AppAjustesEleitosRoute
   '/ajustes/equipe': typeof AppAjustesEquipeRoute
   '/ajustes/fontes': typeof AppAjustesFontesRoute
@@ -305,11 +384,21 @@ export interface FileRoutesByFullPath {
   '/ajustes/whatsapp': typeof AppAjustesWhatsappRoute
   '/alertas/$alertId': typeof AppAlertasAlertIdRoute
   '/camara/$vereadorId': typeof AppCamaraVereadorIdRoute
+  '/casos/$casoId': typeof AppCasosCasoIdRoute
   '/relatorios/$reportId': typeof AppRelatoriosReportIdRoute
   '/ajustes/': typeof AppAjustesIndexRoute
   '/alertas/': typeof AppAlertasIndexRoute
   '/camara/': typeof AppCamaraIndexRoute
+  '/casos/': typeof AppCasosIndexRoute
   '/relatorios/': typeof AppRelatoriosIndexRoute
+  '/ajustes/acesso/equipe': typeof AppAjustesAcessoEquipeRoute
+  '/ajustes/acesso/organizacoes': typeof AppAjustesAcessoOrganizacoesRoute
+  '/ajustes/acesso/perfil': typeof AppAjustesAcessoPerfilRoute
+  '/ajustes/cidade/eleitos': typeof AppAjustesCidadeEleitosRoute
+  '/ajustes/cidade/vocabulario': typeof AppAjustesCidadeVocabularioRoute
+  '/ajustes/escuta/imprensa': typeof AppAjustesEscutaImprensaRoute
+  '/ajustes/escuta/instagram': typeof AppAjustesEscutaInstagramRoute
+  '/ajustes/escuta/whatsapp': typeof AppAjustesEscutaWhatsappRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -335,6 +424,7 @@ export interface FileRoutesByTo {
   '/site/termos': typeof SiteTermosRoute
   '/site': typeof SiteIndexRoute
   '/ajustes/auditoria': typeof AppAjustesAuditoriaRoute
+  '/ajustes/conformidade': typeof AppAjustesConformidadeRoute
   '/ajustes/eleitos': typeof AppAjustesEleitosRoute
   '/ajustes/equipe': typeof AppAjustesEquipeRoute
   '/ajustes/fontes': typeof AppAjustesFontesRoute
@@ -344,11 +434,21 @@ export interface FileRoutesByTo {
   '/ajustes/whatsapp': typeof AppAjustesWhatsappRoute
   '/alertas/$alertId': typeof AppAlertasAlertIdRoute
   '/camara/$vereadorId': typeof AppCamaraVereadorIdRoute
+  '/casos/$casoId': typeof AppCasosCasoIdRoute
   '/relatorios/$reportId': typeof AppRelatoriosReportIdRoute
   '/ajustes': typeof AppAjustesIndexRoute
   '/alertas': typeof AppAlertasIndexRoute
   '/camara': typeof AppCamaraIndexRoute
+  '/casos': typeof AppCasosIndexRoute
   '/relatorios': typeof AppRelatoriosIndexRoute
+  '/ajustes/acesso/equipe': typeof AppAjustesAcessoEquipeRoute
+  '/ajustes/acesso/organizacoes': typeof AppAjustesAcessoOrganizacoesRoute
+  '/ajustes/acesso/perfil': typeof AppAjustesAcessoPerfilRoute
+  '/ajustes/cidade/eleitos': typeof AppAjustesCidadeEleitosRoute
+  '/ajustes/cidade/vocabulario': typeof AppAjustesCidadeVocabularioRoute
+  '/ajustes/escuta/imprensa': typeof AppAjustesEscutaImprensaRoute
+  '/ajustes/escuta/instagram': typeof AppAjustesEscutaInstagramRoute
+  '/ajustes/escuta/whatsapp': typeof AppAjustesEscutaWhatsappRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -370,6 +470,7 @@ export interface FileRoutesById {
   '/_app/ajustes': typeof AppAjustesRouteRouteWithChildren
   '/_app/alertas': typeof AppAlertasRouteWithChildren
   '/_app/camara': typeof AppCamaraRouteWithChildren
+  '/_app/casos': typeof AppCasosRouteWithChildren
   '/_app/painel': typeof AppPainelRoute
   '/_app/rede': typeof AppRedeRoute
   '/_app/relatorios': typeof AppRelatoriosRouteWithChildren
@@ -381,6 +482,7 @@ export interface FileRoutesById {
   '/site/termos': typeof SiteTermosRoute
   '/site/': typeof SiteIndexRoute
   '/_app/ajustes/auditoria': typeof AppAjustesAuditoriaRoute
+  '/_app/ajustes/conformidade': typeof AppAjustesConformidadeRoute
   '/_app/ajustes/eleitos': typeof AppAjustesEleitosRoute
   '/_app/ajustes/equipe': typeof AppAjustesEquipeRoute
   '/_app/ajustes/fontes': typeof AppAjustesFontesRoute
@@ -390,11 +492,21 @@ export interface FileRoutesById {
   '/_app/ajustes/whatsapp': typeof AppAjustesWhatsappRoute
   '/_app/alertas/$alertId': typeof AppAlertasAlertIdRoute
   '/_app/camara/$vereadorId': typeof AppCamaraVereadorIdRoute
+  '/_app/casos/$casoId': typeof AppCasosCasoIdRoute
   '/_app/relatorios/$reportId': typeof AppRelatoriosReportIdRoute
   '/_app/ajustes/': typeof AppAjustesIndexRoute
   '/_app/alertas/': typeof AppAlertasIndexRoute
   '/_app/camara/': typeof AppCamaraIndexRoute
+  '/_app/casos/': typeof AppCasosIndexRoute
   '/_app/relatorios/': typeof AppRelatoriosIndexRoute
+  '/_app/ajustes/acesso/equipe': typeof AppAjustesAcessoEquipeRoute
+  '/_app/ajustes/acesso/organizacoes': typeof AppAjustesAcessoOrganizacoesRoute
+  '/_app/ajustes/acesso/perfil': typeof AppAjustesAcessoPerfilRoute
+  '/_app/ajustes/cidade/eleitos': typeof AppAjustesCidadeEleitosRoute
+  '/_app/ajustes/cidade/vocabulario': typeof AppAjustesCidadeVocabularioRoute
+  '/_app/ajustes/escuta/imprensa': typeof AppAjustesEscutaImprensaRoute
+  '/_app/ajustes/escuta/instagram': typeof AppAjustesEscutaInstagramRoute
+  '/_app/ajustes/escuta/whatsapp': typeof AppAjustesEscutaWhatsappRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -416,6 +528,7 @@ export interface FileRouteTypes {
     | '/ajustes'
     | '/alertas'
     | '/camara'
+    | '/casos'
     | '/painel'
     | '/rede'
     | '/relatorios'
@@ -427,6 +540,7 @@ export interface FileRouteTypes {
     | '/site/termos'
     | '/site/'
     | '/ajustes/auditoria'
+    | '/ajustes/conformidade'
     | '/ajustes/eleitos'
     | '/ajustes/equipe'
     | '/ajustes/fontes'
@@ -436,11 +550,21 @@ export interface FileRouteTypes {
     | '/ajustes/whatsapp'
     | '/alertas/$alertId'
     | '/camara/$vereadorId'
+    | '/casos/$casoId'
     | '/relatorios/$reportId'
     | '/ajustes/'
     | '/alertas/'
     | '/camara/'
+    | '/casos/'
     | '/relatorios/'
+    | '/ajustes/acesso/equipe'
+    | '/ajustes/acesso/organizacoes'
+    | '/ajustes/acesso/perfil'
+    | '/ajustes/cidade/eleitos'
+    | '/ajustes/cidade/vocabulario'
+    | '/ajustes/escuta/imprensa'
+    | '/ajustes/escuta/instagram'
+    | '/ajustes/escuta/whatsapp'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -466,6 +590,7 @@ export interface FileRouteTypes {
     | '/site/termos'
     | '/site'
     | '/ajustes/auditoria'
+    | '/ajustes/conformidade'
     | '/ajustes/eleitos'
     | '/ajustes/equipe'
     | '/ajustes/fontes'
@@ -475,11 +600,21 @@ export interface FileRouteTypes {
     | '/ajustes/whatsapp'
     | '/alertas/$alertId'
     | '/camara/$vereadorId'
+    | '/casos/$casoId'
     | '/relatorios/$reportId'
     | '/ajustes'
     | '/alertas'
     | '/camara'
+    | '/casos'
     | '/relatorios'
+    | '/ajustes/acesso/equipe'
+    | '/ajustes/acesso/organizacoes'
+    | '/ajustes/acesso/perfil'
+    | '/ajustes/cidade/eleitos'
+    | '/ajustes/cidade/vocabulario'
+    | '/ajustes/escuta/imprensa'
+    | '/ajustes/escuta/instagram'
+    | '/ajustes/escuta/whatsapp'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -500,6 +635,7 @@ export interface FileRouteTypes {
     | '/_app/ajustes'
     | '/_app/alertas'
     | '/_app/camara'
+    | '/_app/casos'
     | '/_app/painel'
     | '/_app/rede'
     | '/_app/relatorios'
@@ -511,6 +647,7 @@ export interface FileRouteTypes {
     | '/site/termos'
     | '/site/'
     | '/_app/ajustes/auditoria'
+    | '/_app/ajustes/conformidade'
     | '/_app/ajustes/eleitos'
     | '/_app/ajustes/equipe'
     | '/_app/ajustes/fontes'
@@ -520,11 +657,21 @@ export interface FileRouteTypes {
     | '/_app/ajustes/whatsapp'
     | '/_app/alertas/$alertId'
     | '/_app/camara/$vereadorId'
+    | '/_app/casos/$casoId'
     | '/_app/relatorios/$reportId'
     | '/_app/ajustes/'
     | '/_app/alertas/'
     | '/_app/camara/'
+    | '/_app/casos/'
     | '/_app/relatorios/'
+    | '/_app/ajustes/acesso/equipe'
+    | '/_app/ajustes/acesso/organizacoes'
+    | '/_app/ajustes/acesso/perfil'
+    | '/_app/ajustes/cidade/eleitos'
+    | '/_app/ajustes/cidade/vocabulario'
+    | '/_app/ajustes/escuta/imprensa'
+    | '/_app/ajustes/escuta/instagram'
+    | '/_app/ajustes/escuta/whatsapp'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -675,6 +822,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPainelRouteImport
       parentRoute: typeof AppRouteRoute
     }
+    '/_app/casos': {
+      id: '/_app/casos'
+      path: '/casos'
+      fullPath: '/casos'
+      preLoaderRoute: typeof AppCasosRouteImport
+      parentRoute: typeof AppRouteRoute
+    }
     '/_app/camara': {
       id: '/_app/camara'
       path: '/camara'
@@ -703,6 +857,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRelatoriosIndexRouteImport
       parentRoute: typeof AppRelatoriosRoute
     }
+    '/_app/casos/': {
+      id: '/_app/casos/'
+      path: '/'
+      fullPath: '/casos/'
+      preLoaderRoute: typeof AppCasosIndexRouteImport
+      parentRoute: typeof AppCasosRoute
+    }
     '/_app/camara/': {
       id: '/_app/camara/'
       path: '/'
@@ -730,6 +891,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/relatorios/$reportId'
       preLoaderRoute: typeof AppRelatoriosReportIdRouteImport
       parentRoute: typeof AppRelatoriosRoute
+    }
+    '/_app/casos/$casoId': {
+      id: '/_app/casos/$casoId'
+      path: '/$casoId'
+      fullPath: '/casos/$casoId'
+      preLoaderRoute: typeof AppCasosCasoIdRouteImport
+      parentRoute: typeof AppCasosRoute
     }
     '/_app/camara/$vereadorId': {
       id: '/_app/camara/$vereadorId'
@@ -794,6 +962,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAjustesEleitosRouteImport
       parentRoute: typeof AppAjustesRouteRoute
     }
+    '/_app/ajustes/conformidade': {
+      id: '/_app/ajustes/conformidade'
+      path: '/conformidade'
+      fullPath: '/ajustes/conformidade'
+      preLoaderRoute: typeof AppAjustesConformidadeRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
     '/_app/ajustes/auditoria': {
       id: '/_app/ajustes/auditoria'
       path: '/auditoria'
@@ -850,6 +1025,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksAnalyzePendingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/ajustes/escuta/whatsapp': {
+      id: '/_app/ajustes/escuta/whatsapp'
+      path: '/escuta/whatsapp'
+      fullPath: '/ajustes/escuta/whatsapp'
+      preLoaderRoute: typeof AppAjustesEscutaWhatsappRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
+    '/_app/ajustes/escuta/instagram': {
+      id: '/_app/ajustes/escuta/instagram'
+      path: '/escuta/instagram'
+      fullPath: '/ajustes/escuta/instagram'
+      preLoaderRoute: typeof AppAjustesEscutaInstagramRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
+    '/_app/ajustes/escuta/imprensa': {
+      id: '/_app/ajustes/escuta/imprensa'
+      path: '/escuta/imprensa'
+      fullPath: '/ajustes/escuta/imprensa'
+      preLoaderRoute: typeof AppAjustesEscutaImprensaRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
+    '/_app/ajustes/cidade/vocabulario': {
+      id: '/_app/ajustes/cidade/vocabulario'
+      path: '/cidade/vocabulario'
+      fullPath: '/ajustes/cidade/vocabulario'
+      preLoaderRoute: typeof AppAjustesCidadeVocabularioRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
+    '/_app/ajustes/cidade/eleitos': {
+      id: '/_app/ajustes/cidade/eleitos'
+      path: '/cidade/eleitos'
+      fullPath: '/ajustes/cidade/eleitos'
+      preLoaderRoute: typeof AppAjustesCidadeEleitosRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
+    '/_app/ajustes/acesso/perfil': {
+      id: '/_app/ajustes/acesso/perfil'
+      path: '/acesso/perfil'
+      fullPath: '/ajustes/acesso/perfil'
+      preLoaderRoute: typeof AppAjustesAcessoPerfilRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
+    '/_app/ajustes/acesso/organizacoes': {
+      id: '/_app/ajustes/acesso/organizacoes'
+      path: '/acesso/organizacoes'
+      fullPath: '/ajustes/acesso/organizacoes'
+      preLoaderRoute: typeof AppAjustesAcessoOrganizacoesRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
+    '/_app/ajustes/acesso/equipe': {
+      id: '/_app/ajustes/acesso/equipe'
+      path: '/acesso/equipe'
+      fullPath: '/ajustes/acesso/equipe'
+      preLoaderRoute: typeof AppAjustesAcessoEquipeRouteImport
+      parentRoute: typeof AppAjustesRouteRoute
+    }
     '/api/public/evolution/webhook/$token': {
       id: '/api/public/evolution/webhook/$token'
       path: '/api/public/evolution/webhook/$token'
@@ -862,6 +1093,7 @@ declare module '@tanstack/react-router' {
 
 interface AppAjustesRouteRouteChildren {
   AppAjustesAuditoriaRoute: typeof AppAjustesAuditoriaRoute
+  AppAjustesConformidadeRoute: typeof AppAjustesConformidadeRoute
   AppAjustesEleitosRoute: typeof AppAjustesEleitosRoute
   AppAjustesEquipeRoute: typeof AppAjustesEquipeRoute
   AppAjustesFontesRoute: typeof AppAjustesFontesRoute
@@ -870,10 +1102,19 @@ interface AppAjustesRouteRouteChildren {
   AppAjustesPerfilRoute: typeof AppAjustesPerfilRoute
   AppAjustesWhatsappRoute: typeof AppAjustesWhatsappRoute
   AppAjustesIndexRoute: typeof AppAjustesIndexRoute
+  AppAjustesAcessoEquipeRoute: typeof AppAjustesAcessoEquipeRoute
+  AppAjustesAcessoOrganizacoesRoute: typeof AppAjustesAcessoOrganizacoesRoute
+  AppAjustesAcessoPerfilRoute: typeof AppAjustesAcessoPerfilRoute
+  AppAjustesCidadeEleitosRoute: typeof AppAjustesCidadeEleitosRoute
+  AppAjustesCidadeVocabularioRoute: typeof AppAjustesCidadeVocabularioRoute
+  AppAjustesEscutaImprensaRoute: typeof AppAjustesEscutaImprensaRoute
+  AppAjustesEscutaInstagramRoute: typeof AppAjustesEscutaInstagramRoute
+  AppAjustesEscutaWhatsappRoute: typeof AppAjustesEscutaWhatsappRoute
 }
 
 const AppAjustesRouteRouteChildren: AppAjustesRouteRouteChildren = {
   AppAjustesAuditoriaRoute: AppAjustesAuditoriaRoute,
+  AppAjustesConformidadeRoute: AppAjustesConformidadeRoute,
   AppAjustesEleitosRoute: AppAjustesEleitosRoute,
   AppAjustesEquipeRoute: AppAjustesEquipeRoute,
   AppAjustesFontesRoute: AppAjustesFontesRoute,
@@ -882,6 +1123,14 @@ const AppAjustesRouteRouteChildren: AppAjustesRouteRouteChildren = {
   AppAjustesPerfilRoute: AppAjustesPerfilRoute,
   AppAjustesWhatsappRoute: AppAjustesWhatsappRoute,
   AppAjustesIndexRoute: AppAjustesIndexRoute,
+  AppAjustesAcessoEquipeRoute: AppAjustesAcessoEquipeRoute,
+  AppAjustesAcessoOrganizacoesRoute: AppAjustesAcessoOrganizacoesRoute,
+  AppAjustesAcessoPerfilRoute: AppAjustesAcessoPerfilRoute,
+  AppAjustesCidadeEleitosRoute: AppAjustesCidadeEleitosRoute,
+  AppAjustesCidadeVocabularioRoute: AppAjustesCidadeVocabularioRoute,
+  AppAjustesEscutaImprensaRoute: AppAjustesEscutaImprensaRoute,
+  AppAjustesEscutaInstagramRoute: AppAjustesEscutaInstagramRoute,
+  AppAjustesEscutaWhatsappRoute: AppAjustesEscutaWhatsappRoute,
 }
 
 const AppAjustesRouteRouteWithChildren = AppAjustesRouteRoute._addFileChildren(
@@ -916,6 +1165,20 @@ const AppCamaraRouteWithChildren = AppCamaraRoute._addFileChildren(
   AppCamaraRouteChildren,
 )
 
+interface AppCasosRouteChildren {
+  AppCasosCasoIdRoute: typeof AppCasosCasoIdRoute
+  AppCasosIndexRoute: typeof AppCasosIndexRoute
+}
+
+const AppCasosRouteChildren: AppCasosRouteChildren = {
+  AppCasosCasoIdRoute: AppCasosCasoIdRoute,
+  AppCasosIndexRoute: AppCasosIndexRoute,
+}
+
+const AppCasosRouteWithChildren = AppCasosRoute._addFileChildren(
+  AppCasosRouteChildren,
+)
+
 interface AppRelatoriosRouteChildren {
   AppRelatoriosReportIdRoute: typeof AppRelatoriosReportIdRoute
   AppRelatoriosIndexRoute: typeof AppRelatoriosIndexRoute
@@ -934,6 +1197,7 @@ interface AppRouteRouteChildren {
   AppAjustesRouteRoute: typeof AppAjustesRouteRouteWithChildren
   AppAlertasRoute: typeof AppAlertasRouteWithChildren
   AppCamaraRoute: typeof AppCamaraRouteWithChildren
+  AppCasosRoute: typeof AppCasosRouteWithChildren
   AppPainelRoute: typeof AppPainelRoute
   AppRedeRoute: typeof AppRedeRoute
   AppRelatoriosRoute: typeof AppRelatoriosRouteWithChildren
@@ -945,6 +1209,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppAjustesRouteRoute: AppAjustesRouteRouteWithChildren,
   AppAlertasRoute: AppAlertasRouteWithChildren,
   AppCamaraRoute: AppCamaraRouteWithChildren,
+  AppCasosRoute: AppCasosRouteWithChildren,
   AppPainelRoute: AppPainelRoute,
   AppRedeRoute: AppRedeRoute,
   AppRelatoriosRoute: AppRelatoriosRouteWithChildren,

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { listElected } from "@/lib/elected.functions";
+import { BlindNote, BlindTag, BlindValue } from "@/components/v2/empty-signal";
 import { useCurrentOrg } from "@/lib/use-current-org";
 
 export const Route = createFileRoute("/_app/camara/$vereadorId")({
@@ -9,11 +10,13 @@ export const Route = createFileRoute("/_app/camara/$vereadorId")({
   component: Screen,
 });
 
+/** Nenhuma destas quatro bases existe no banco. `count: 0` fazia cada aba afirmar "procurei e
+ *  não achou nada deste vereador" — o oposto do que acontece: nunca houve o que procurar. */
 const TABS = [
-  { id: "falas", label: "🎙 Falas", count: 0 },
-  { id: "cobrancas", label: "📌 Cobranças", count: 0 },
-  { id: "justificativas", label: "📄 Justificativas", count: 0 },
-  { id: "entregas", label: "✅ Entregas", count: 0 },
+  { id: "falas", label: "🎙 Falas" },
+  { id: "cobrancas", label: "📌 Cobranças" },
+  { id: "justificativas", label: "📄 Justificativas" },
+  { id: "entregas", label: "✅ Entregas" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -46,12 +49,12 @@ const ALIGN_META: Record<
     textClass: "text-v2-crit",
   },
   neutral: {
-    label: "INDEPENDENTE",
+    label: "NÃO CLASSIFICADO",
     badgeClass: "bg-v2-warn-bg text-v2-warn",
     textClass: "text-v2-warn",
   },
   management: {
-    label: "INDEPENDENTE",
+    label: "GESTÃO",
     badgeClass: "bg-v2-warn-bg text-v2-warn",
     textClass: "text-v2-warn",
   },
@@ -130,6 +133,10 @@ function Screen() {
 
   const name = vereador.nome_urna ?? vereador.nome;
   const align = ALIGN_META[(vereador.alignment as ElectedAlignment) ?? "neutral"];
+  const tabNoun =
+    TABS.find((t) => t.id === tab)
+      ?.label.replace(/^\S+\s/, "")
+      .toLowerCase() ?? "";
 
   return (
     <div className="mx-auto flex w-full max-w-[980px] flex-col">
@@ -152,7 +159,9 @@ function Screen() {
             </span>
           </div>
           <div className="mt-1 text-[13px] text-v2-ink-3">
-            Vereador · {vereador.partido_sigla ?? "—"} · {vereador.ano_eleicao}
+            Vereador ·{" "}
+            {vereador.partido_sigla ?? <BlindValue why="partido ausente no registro do TSE" />} ·{" "}
+            {vereador.ano_eleicao}
           </div>
         </div>
         <div className="flex flex-none gap-3">
@@ -161,8 +170,10 @@ function Screen() {
               ALINHAMENTO
             </div>
             <div className={`mt-1 text-[16px] font-[650] ${align.textClass}`}>{align.label}</div>
+            {/* Não há histórico de votação: o alinhamento é o que a equipe classificou à mão.
+                "automático após 10 votações" descrevia um mecanismo que não existe. */}
             <div className="mt-[5px] font-mono text-[10px] text-v2-ink-3">
-              automático após 10 votações
+              classificado pela equipe
             </div>
           </div>
           <div className="w-[118px] rounded-xl border border-v2-line bg-v2-card px-[18px] py-[13px] text-center">
@@ -189,7 +200,7 @@ function Screen() {
                 : "font-semibold text-v2-ink-3 hover:text-v2-ink"
             }`}
           >
-            {t.label} <span className="text-v2-faint">{t.count}</span>
+            {t.label} <span className="text-v2-faint">—</span>
           </button>
         ))}
       </div>
@@ -197,16 +208,12 @@ function Screen() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr]">
         {/* Left: repositório — sem backend de falas/cobranças/justificativas/entregas ainda. */}
         <div className="self-start overflow-hidden rounded-[13px] border border-v2-line bg-v2-card">
-          <div className="flex flex-col items-center gap-1.5 px-6 py-16 text-center">
-            <div className="font-mono text-[10.5px] font-semibold tracking-[0.1em] text-v2-faint">
-              0 ITENS INDEXADOS
-            </div>
-            <div className="text-[13.5px] text-v2-ink-2">
-              Repositório de{" "}
-              {TABS.find((t) => t.id === tab)
-                ?.label.replace(/^\S+\s/, "")
-                .toLowerCase()}{" "}
-              em consolidação — dados completos na próxima sincronização.
+          <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+            <BlindTag>sem base de {tabNoun}</BlindTag>
+            <div className="max-w-[380px] text-[13px] leading-normal text-v2-ink-2">
+              O InPol não coleta {tabNoun} da Câmara — não é o caso de este vereador não ter
+              nenhuma; é que essa fonte não existe no sistema. Prometer “próxima sincronização” aqui
+              seria mandar esperar por algo que não está a caminho.
             </div>
           </div>
         </div>
@@ -217,16 +224,17 @@ function Screen() {
             <div className="mb-2.5 font-mono text-[11px] font-bold tracking-[0.1em] text-v2-ink-3">
               COBRANÇAS AO GOVERNO
             </div>
-            <div className="py-2 text-[12.5px] text-v2-ink-3">Sem dados suficientes ainda.</div>
+            <BlindValue why="requerimentos da Câmara não são coletados" className="text-[12.5px]" />
           </div>
 
           <div className="rounded-[13px] border border-v2-line bg-v2-card px-[18px] py-4">
             <div className="mb-2 font-mono text-[11px] font-bold tracking-[0.1em] text-v2-ink-3">
               PADRÃO DE ATUAÇÃO
             </div>
-            <div className="text-[12.5px] leading-[1.6] text-v2-ink-3">
-              Sem dados suficientes ainda.
-            </div>
+            <BlindValue
+              why="depende de falas e votações, que não são coletadas"
+              className="text-[12.5px]"
+            />
           </div>
         </div>
       </div>
