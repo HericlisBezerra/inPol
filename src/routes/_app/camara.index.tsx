@@ -159,16 +159,22 @@ function Screen() {
 
       {/* Placar — contado das linhas reais de `elected_officials`. */}
       <div className="mt-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+        {/* `management` (gestão) é uma CLASSIFICAÇÃO — vereador que compõe o governo —, não a
+            ausência de uma. Somá-lo a `neutral` fazia a tela declarar "2 sem posicionamento
+            definido" enquanto a lista ao lado rotulava os mesmos dois como "gestão". Base é
+            quem vota com o governo: aliados + gestão. Não classificado é só o default do banco. */}
         <StatCard
           label="Base aliada"
-          value={placar ? String(placar.ally) : null}
+          value={placar ? String(placar.ally + placar.management) : null}
           why="nenhum eleito importado"
           valueClass="text-v2-green"
-          suffix="vereadores"
+          suffix={
+            placar && placar.management > 0 ? `inclui ${placar.management} da gestão` : "vereadores"
+          }
         />
         <StatCard
           label="Não classificados"
-          value={placar ? String(placar.neutral + placar.management) : null}
+          value={placar ? String(placar.neutral) : null}
           why="nenhum eleito importado"
           valueClass="text-v2-ink-3"
           suffix="sem posicionamento definido"
