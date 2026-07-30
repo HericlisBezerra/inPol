@@ -217,12 +217,6 @@ function Screen() {
   const worst = known.length > 0 ? known[known.length - 1] : undefined;
 
   const totalMsgs = items.reduce((s, it) => s + it.msgs, 0);
-  const negatives = [...items]
-    .filter((it) => it.approval < 50)
-    .sort((a, b) => a.approval - b.approval)
-    .slice(0, 2);
-  const negativeShare =
-    totalMsgs > 0 ? Math.round((negatives.reduce((s, it) => s + it.msgs, 0) / totalMsgs) * 100) : 0;
 
   /**
    * A manchete: "onde estou perdendo?".
@@ -235,6 +229,20 @@ function Screen() {
    */
   const rangeLabel = RANGES.find((r) => r.id === range)?.label ?? range;
   const rankable = items.filter((it) => it.msgs >= HEADLINE_MIN_MSGS);
+  // Ficam de fora do ranking, mas não somem: bairro com 1 mensagem existe e a pessoa
+  // precisa saber que ele apareceu — só não pode disputar posição com quem tem 600.
+  const thinVolume = items
+    .filter((it) => it.msgs < HEADLINE_MIN_MSGS)
+    .sort((a, b) => b.msgs - a.msgs);
+  // O insight de rodapé usa o MESMO piso da manchete. Antes olhava `items` inteiro e
+  // elegia os dois piores por aprovação — que eram bairros de 1 e 2 mensagens, gerando
+  // "Jundiaí e Várzea Paulista concentram 0% das mensagens", uma frase sem informação.
+  const negatives = [...rankable]
+    .filter((it) => it.approval < NEUTRAL_APPROVAL)
+    .sort((a, b) => a.approval - b.approval)
+    .slice(0, 2);
+  const negativeShare =
+    totalMsgs > 0 ? Math.round((negatives.reduce((s, it) => s + it.msgs, 0) / totalMsgs) * 100) : 0;
   const worstRanked = [...rankable].sort((a, b) => a.approval - b.approval);
   const losing = worstRanked.filter((it) => it.approval < NEUTRAL_APPROVAL).slice(0, 2);
   const losingMsgs = losing.reduce((s, it) => s + it.msgs, 0);
@@ -416,31 +424,42 @@ function Screen() {
                 Só bairros com mensagem classificada no período. Os demais estão em “Cobertura da
                 escuta”, abaixo.
               </BlindNote>
+              {/* Duas listas, não uma. A manchete exige piso de volume para não deixar um bairro
+                  de 1 mensagem liderar — mas o ranking mostrava TODOS misturados, então o topo
+                  vinha com 74%/78% de bairros com 1 mensagem cada, desmentindo a manchete logo
+                  acima. Abaixo do piso a aprovação não é medida de nada: é uma ou duas frases. */}
               <div className="flex flex-col">
                 {isLoading && <span className="py-2 text-[12px] text-v2-ink-3">Carregando…</span>}
                 {!isLoading &&
-                  items.map((row, i) => (
-                    <div
+                  rankable.map((row, i) => (
+                    <RankRow
                       key={row.name}
-                      className={`flex items-center gap-2.5 py-[9px] ${
-                        i < items.length - 1 ? "border-b border-v2-track" : ""
-                      }`}
-                    >
-                      <span className="w-[18px] font-mono text-[11px] text-v2-faint">{i + 1}</span>
-                      <span className="flex-1 text-[13.5px] font-semibold text-v2-ink">
-                        {row.name}
-                      </span>
-                      <span
-                        className={`w-[38px] text-right font-mono text-[12px] ${APPROVAL_TONE[toneForApproval(row.approval)]}`}
-                      >
-                        {row.approval}%
-                      </span>
-                      <span className="w-[60px] text-right font-mono text-[11px] text-v2-faint">
-                        {row.msgs}
-                      </span>
-                    </div>
+                      row={row}
+                      pos={i + 1}
+                      last={i === rankable.length - 1}
+                    />
                   ))}
+                {!isLoading && rankable.length === 0 && (
+                  <span className="py-2 text-[12px] text-v2-ink-3">
+                    Nenhum bairro com volume suficiente para comparar.
+                  </span>
+                )}
               </div>
+              {!isLoading && thinVolume.length > 0 && (
+                <div className="mt-3 border-t border-v2-track pt-3">
+                  <BlindNote className="mb-1.5">
+                    Menos de {HEADLINE_MIN_MSGS} mensagens no período — volume baixo demais para a
+                    aprovação significar alguma coisa. Listados para você saber que existem.
+                  </BlindNote>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    {thinVolume.map((row) => (
+                      <span key={row.name} className="font-mono text-[11px] text-v2-faint">
+                        {row.name} <span className="text-v2-line-strong">·</span> {row.msgs}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* AI insight */}
@@ -704,6 +723,21 @@ function UnknownRow({
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+function RankRow({ row, pos, last }: { row: Item; pos: number; last: boolean }) {
+  return (
+    <div className={`flex items-center gap-2.5 py-[9px] ${last ? "" : "border-b border-v2-track"}`}>
+      <span className="w-[18px] font-mono text-[11px] text-v2-faint">{pos}</span>
+      <span className="flex-1 text-[13.5px] font-semibold text-v2-ink">{row.name}</span>
+      <span
+        className={`w-[38px] text-right font-mono text-[12px] ${APPROVAL_TONE[toneForApproval(row.approval)]}`}
+      >
+        {row.approval}%
+      </span>
+      <span className="w-[60px] text-right font-mono text-[11px] text-v2-faint">{row.msgs}</span>
     </div>
   );
 }
