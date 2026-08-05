@@ -55,6 +55,7 @@ import { Route as ApiPublicHooksGenerateReportsRouteImport } from './routes/api/
 import { Route as ApiPublicHooksDetectAlertsRouteImport } from './routes/api/public/hooks/detect-alerts'
 import { Route as ApiPublicHooksBackfillWhatsappRouteImport } from './routes/api/public/hooks/backfill-whatsapp'
 import { Route as ApiPublicHooksAnalyzePendingRouteImport } from './routes/api/public/hooks/analyze-pending'
+import { Route as AppCamaraSessaoSessionIdRouteImport } from './routes/_app/camara.sessao.$sessionId'
 import { Route as AppAjustesEscutaWhatsappRouteImport } from './routes/_app/ajustes/escuta.whatsapp'
 import { Route as AppAjustesEscutaInstagramRouteImport } from './routes/_app/ajustes/escuta.instagram'
 import { Route as AppAjustesEscutaImprensaRouteImport } from './routes/_app/ajustes/escuta.imprensa'
@@ -300,6 +301,12 @@ const ApiPublicHooksAnalyzePendingRoute =
     path: '/api/public/hooks/analyze-pending',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AppCamaraSessaoSessionIdRoute =
+  AppCamaraSessaoSessionIdRouteImport.update({
+    id: '/sessao/$sessionId',
+    path: '/sessao/$sessionId',
+    getParentRoute: () => AppCamaraRoute,
+  } as any)
 const AppAjustesEscutaWhatsappRoute =
   AppAjustesEscutaWhatsappRouteImport.update({
     id: '/escuta/whatsapp',
@@ -399,6 +406,7 @@ export interface FileRoutesByFullPath {
   '/ajustes/escuta/imprensa': typeof AppAjustesEscutaImprensaRoute
   '/ajustes/escuta/instagram': typeof AppAjustesEscutaInstagramRoute
   '/ajustes/escuta/whatsapp': typeof AppAjustesEscutaWhatsappRoute
+  '/camara/sessao/$sessionId': typeof AppCamaraSessaoSessionIdRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -449,6 +457,7 @@ export interface FileRoutesByTo {
   '/ajustes/escuta/imprensa': typeof AppAjustesEscutaImprensaRoute
   '/ajustes/escuta/instagram': typeof AppAjustesEscutaInstagramRoute
   '/ajustes/escuta/whatsapp': typeof AppAjustesEscutaWhatsappRoute
+  '/camara/sessao/$sessionId': typeof AppCamaraSessaoSessionIdRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -507,6 +516,7 @@ export interface FileRoutesById {
   '/_app/ajustes/escuta/imprensa': typeof AppAjustesEscutaImprensaRoute
   '/_app/ajustes/escuta/instagram': typeof AppAjustesEscutaInstagramRoute
   '/_app/ajustes/escuta/whatsapp': typeof AppAjustesEscutaWhatsappRoute
+  '/_app/camara/sessao/$sessionId': typeof AppCamaraSessaoSessionIdRoute
   '/api/public/hooks/analyze-pending': typeof ApiPublicHooksAnalyzePendingRoute
   '/api/public/hooks/backfill-whatsapp': typeof ApiPublicHooksBackfillWhatsappRoute
   '/api/public/hooks/detect-alerts': typeof ApiPublicHooksDetectAlertsRoute
@@ -565,6 +575,7 @@ export interface FileRouteTypes {
     | '/ajustes/escuta/imprensa'
     | '/ajustes/escuta/instagram'
     | '/ajustes/escuta/whatsapp'
+    | '/camara/sessao/$sessionId'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -615,6 +626,7 @@ export interface FileRouteTypes {
     | '/ajustes/escuta/imprensa'
     | '/ajustes/escuta/instagram'
     | '/ajustes/escuta/whatsapp'
+    | '/camara/sessao/$sessionId'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -672,6 +684,7 @@ export interface FileRouteTypes {
     | '/_app/ajustes/escuta/imprensa'
     | '/_app/ajustes/escuta/instagram'
     | '/_app/ajustes/escuta/whatsapp'
+    | '/_app/camara/sessao/$sessionId'
     | '/api/public/hooks/analyze-pending'
     | '/api/public/hooks/backfill-whatsapp'
     | '/api/public/hooks/detect-alerts'
@@ -1025,6 +1038,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksAnalyzePendingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/camara/sessao/$sessionId': {
+      id: '/_app/camara/sessao/$sessionId'
+      path: '/sessao/$sessionId'
+      fullPath: '/camara/sessao/$sessionId'
+      preLoaderRoute: typeof AppCamaraSessaoSessionIdRouteImport
+      parentRoute: typeof AppCamaraRoute
+    }
     '/_app/ajustes/escuta/whatsapp': {
       id: '/_app/ajustes/escuta/whatsapp'
       path: '/escuta/whatsapp'
@@ -1154,11 +1174,13 @@ const AppAlertasRouteWithChildren = AppAlertasRoute._addFileChildren(
 interface AppCamaraRouteChildren {
   AppCamaraVereadorIdRoute: typeof AppCamaraVereadorIdRoute
   AppCamaraIndexRoute: typeof AppCamaraIndexRoute
+  AppCamaraSessaoSessionIdRoute: typeof AppCamaraSessaoSessionIdRoute
 }
 
 const AppCamaraRouteChildren: AppCamaraRouteChildren = {
   AppCamaraVereadorIdRoute: AppCamaraVereadorIdRoute,
   AppCamaraIndexRoute: AppCamaraIndexRoute,
+  AppCamaraSessaoSessionIdRoute: AppCamaraSessaoSessionIdRoute,
 }
 
 const AppCamaraRouteWithChildren = AppCamaraRoute._addFileChildren(
