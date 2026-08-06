@@ -139,7 +139,7 @@ export async function analyzeSession(
   try {
     const resp = await callAi({
       model: MODEL_PRO,
-      fallbackModels: [MODEL_FLASH, MODEL_DEEPSEEK], // PRO → Flash → DeepSeek → determinístico
+      fallbackModels: [MODEL_DEEPSEEK, MODEL_FLASH], // PRO → DeepSeek → Flash → determinístico
       temperature: 0.4,
       maxTokens: 8000,
       timeoutMs: 120_000, // sessão inteira é prompt grande; 90s do relatório de período é curto aqui

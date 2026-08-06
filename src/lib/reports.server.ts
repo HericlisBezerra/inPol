@@ -567,7 +567,7 @@ export async function generateReport(orgId: string, kind: Kind): Promise<string>
   try {
     const aiResp = await callAi({
       model: MODEL_PRO,
-      fallbackModels: [MODEL_FLASH, MODEL_DEEPSEEK], // PRO → Flash → DeepSeek → determinístico
+      fallbackModels: [MODEL_DEEPSEEK, MODEL_FLASH], // PRO → DeepSeek → Flash → determinístico
       temperature: 0.45,
       maxTokens: 8000,
       timeoutMs: 90_000,

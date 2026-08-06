@@ -16,14 +16,27 @@ interface FirecrawlSearchResult {
   markdown?: string;
 }
 
-async function firecrawlSearch(query: string, limit = 8): Promise<FirecrawlSearchResult[]> {
+/**
+ * Busca no Firecrawl. Exportada porque a busca da aplicação (`search.functions.ts`)
+ * passou a usar o mesmo motor — antes ela ia no Google Custom Search / grounding do
+ * Gemini, ou seja, um segundo provedor pago para fazer o que este já faz.
+ *
+ * `tbs` é parâmetro e não constante: o scanner de imprensa quer só as últimas 24h
+ * (`qdr:d`, regra de economia do CLAUDE.md), mas busca digitada por uma pessoa
+ * restrita a 24h devolveria quase nada. Quem chama decide a janela.
+ */
+export async function firecrawlSearch(
+  query: string,
+  limit = 8,
+  tbs: string | null = "qdr:d",
+): Promise<FirecrawlSearchResult[]> {
   const key = process.env.FIRECRAWL_API_KEY;
   if (!key) return [];
   // NOTE: no `scrapeOptions` — search alone is 1 credit/query. Scrape só das URLs novas.
   const res = await fetch(`${FIRECRAWL}/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ query, limit, tbs: "qdr:d" }),
+    body: JSON.stringify({ query, limit, ...(tbs ? { tbs } : {}) }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");

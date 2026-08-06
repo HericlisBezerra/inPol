@@ -24,13 +24,18 @@ function providerFor(model: string): Provider {
 
 // Model ids centralizados. Os `gemini-2.5-*` foram descontinuados para chaves
 // novas (404 "not available to new users") — não reintroduzir.
-// FLASH: alto volume (análise, busca). PRO: relatórios executivos.
+//
+// DeepSeek é o motor PADRÃO desde 2026-08-06. Motivo medido, não preferência:
+// `generateAction` (alerts.server.ts) não declarava modelo e caía no default. Com o
+// dedupe_key quebrado, ele regerava a ação de TODO bucket a cada execução do cron —
+// 53 buckets × 715 execuções ≈ 37.900 chamadas em ~15 dias, no Gemini Flash, cujo
+// output custa ~32× o do DeepSeek ($9,00 vs $0,28 por 1M em jul/2026).
+// Lição embutida na ordem abaixo: o default é o modelo que mais roda, então o default
+// tem que ser o mais barato — quem precisa de mais tem que pedir explicitamente.
+export const MODEL_DEEPSEEK = "deepseek-chat";
+// Gemini fica como FALLBACK: se a DeepSeek cair, o pipeline continua em vez de parar.
 export const MODEL_FLASH = "gemini-3.5-flash";
 export const MODEL_PRO = "gemini-3.1-pro-preview";
-// DeepSeek V4 Flash (OpenAI-compat) — ~17× mais barato que o Gemini 3.5 Flash na micro-análise
-// (output $0.28 vs $9.00 /1M, jul/2026) → motor PRIMÁRIO da micro-análise quando a chave existir.
-// `deepseek-chat` mapeia para `deepseek-v4-flash` (não-thinking) a partir de 2026-07-24.
-export const MODEL_DEEPSEEK = "deepseek-chat";
 
 export type AiMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -132,7 +137,10 @@ async function callAiOnce(model: string, opts: AiCallOptions): Promise<AiResult>
  * to the next fallback model. This is what keeps analysis and reports from dying on a blip.
  */
 export async function callAi(opts: AiCallOptions): Promise<AiResult> {
-  const models = [opts.model ?? MODEL_FLASH, ...(opts.fallbackModels ?? [])];
+  // Default = DeepSeek: chamada que não declara modelo é, por definição, a de maior
+  // volume e menor exigência. Era aqui que os ~37.900 disparos de `generateAction`
+  // vazavam para o Gemini sem ninguém ter escolhido isso.
+  const models = [opts.model ?? MODEL_DEEPSEEK, ...(opts.fallbackModels ?? [])];
   const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   let lastError: unknown;
 

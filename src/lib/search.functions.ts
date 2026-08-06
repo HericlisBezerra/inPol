@@ -66,21 +66,34 @@ export const searchWeb = createServerFn({ method: "POST" })
     const domainList = (domains ?? []).map((d) => d.value).join(", ");
 
     const domainHint = domainList ? ` (${domainList})` : "";
-    const { googleSearch, groundedSearch } = await import("@/lib/web-search.server");
 
-    // Busca REAL: Custom Search (se CSE) → grounding do Gemini (reusa GEMINI_API_KEY) → vazio.
-    // O LLM NUNCA inventa URL — só ranqueia/resume os resultados reais (validados contra a lista).
-    let results =
-      process.env.GOOGLE_API_KEY && process.env.GOOGLE_CSE_ID
-        ? await googleSearch(`${data.q}${domainHint}`, 8)
-        : [];
-    if (results.length === 0) results = await groundedSearch(`${data.q}${domainHint}`, 8);
+    // Busca REAL via Firecrawl — o mesmo motor que o scanner de imprensa já usa.
+    // Antes daqui saíam chamadas ao Google Custom Search e ao grounding do Gemini: um
+    // segundo provedor pago para fazer o que o Firecrawl já fazia. `tbs: null` porque
+    // busca digitada por uma pessoa não pode ficar presa às últimas 24h (o scanner sim).
+    // O LLM NUNCA inventa URL — só ranqueia/resume resultados reais, validados contra a lista.
+    const { firecrawlSearch } = await import("@/lib/scanners.server");
+    const bruto = await firecrawlSearch(`${data.q}${domainHint}`, 8, null);
+    const results = bruto
+      .map((r) => ({
+        title: r.title ?? "",
+        url: r.url ?? "",
+        snippet: r.description ?? "",
+        source: (() => {
+          try {
+            return new URL(r.url ?? "").hostname.replace(/^www\./, "");
+          } catch {
+            return "";
+          }
+        })(),
+      }))
+      .filter((r) => r.url);
     if (results.length === 0) return [];
 
     try {
-      const { callAi, MODEL_FLASH } = await import("@/lib/ai-gateway.server");
+      const { callAi, MODEL_DEEPSEEK } = await import("@/lib/ai-gateway.server");
       const { text } = await callAi({
-        model: MODEL_FLASH,
+        model: MODEL_DEEPSEEK,
         messages: [
           {
             role: "system",

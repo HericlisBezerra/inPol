@@ -3,7 +3,7 @@
 // upserts open alerts in `public.alerts` with a computed stage and level.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { callAiJson } from "@/lib/ai-gateway.server";
+import { callAiJson, MODEL_DEEPSEEK, MODEL_FLASH } from "@/lib/ai-gateway.server";
 import { fetchAllPages } from "@/lib/pg-paginate";
 
 type Stage = "borbulhando" | "ativo" | "manchete";
@@ -178,6 +178,11 @@ async function generateAction(bucket: Bucket): Promise<string> {
       ...bucket.sampleSummaries.slice(0, 8).map((s) => `- ${s}`),
     ].join("\n");
     const out = await callAiJson<{ action?: string }>({
+      // Explícito, não herdado do default: esta é a chamada de MAIOR volume do sistema
+      // (uma por bucket, a cada execução do cron de 30 min). Deixar implícito foi o que
+      // fez ~37.900 chamadas irem para o Gemini sem ninguém ter decidido isso.
+      model: MODEL_DEEPSEEK,
+      fallbackModels: [MODEL_FLASH],
       messages: [
         { role: "system", content: "Responda em JSON puro." },
         { role: "user", content: prompt },
