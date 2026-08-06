@@ -197,13 +197,27 @@ export async function scanNewsForOrg(
   // antes de gastar créditos com scrape.
   const candidates = new Map<string, FirecrawlSearchResult>();
   let queries = 0;
+  let queriesVazias = 0;
   for (const q of queriesToRun) {
     queries++;
     const results = await discoverUrls(q, SEARCH_LIMIT);
+    if (results.length === 0) queriesVazias++;
     for (const r of results) {
       if (!r.url) continue;
       if (!candidates.has(r.url)) candidates.set(r.url, r);
     }
+  }
+
+  // TODA busca voltar vazia não é "não houve notícia na cidade": é o provedor de descoberta
+  // fora do ar ou sem crédito. Com o Firecrawl como único provedor (a chave do Google foi
+  // desativada em 2026-08-06), acabar a cota faz a coleta de imprensa parar SEM ERRO —
+  // o scan retorna 0 inseridos e tudo parece normal. Este log é o que distingue as duas
+  // coisas quando alguém for investigar por que os relatórios ficaram sem imprensa.
+  if (queries > 0 && queriesVazias === queries) {
+    console.error(
+      `[scan-news] org ${orgId}: ${queries} buscas, TODAS vazias. Provável cota/indisponibilidade ` +
+        `do provedor de descoberta — não confundir com ausência de notícia.`,
+    );
   }
 
   const urls = Array.from(candidates.keys());

@@ -138,8 +138,11 @@ export async function analyzeSession(
   let degraded = false;
   try {
     const resp = await callAi({
-      model: MODEL_PRO,
-      fallbackModels: [MODEL_DEEPSEEK, MODEL_FLASH], // PRO → DeepSeek → Flash → determinístico
+      // DeepSeek é o primário desde 2026-08-06: o Héric desativou a chave do Google.
+      // Gemini fica na cadeia porque o gateway PULA provedor sem chave configurada — se a
+      // chave voltar um dia, o fallback volta a valer sozinho, sem alterar código.
+      model: MODEL_DEEPSEEK,
+      fallbackModels: [MODEL_PRO, MODEL_FLASH], // DeepSeek → (Gemini, se houver chave) → determinístico
       temperature: 0.4,
       maxTokens: 8000,
       timeoutMs: 120_000, // sessão inteira é prompt grande; 90s do relatório de período é curto aqui
