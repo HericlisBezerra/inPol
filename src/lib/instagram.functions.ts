@@ -1,11 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { normalizeInstagramHandle } from "@/lib/instagram-handle";
 
 const upsertSchema = z.object({
   orgId: z.string().uuid(),
   id: z.string().uuid().optional(),
-  handle: z.string().min(1).max(60),
+  // 200 e não 60: aceita o link completo colado do app (que passa de 90 caracteres) —
+  // o handler normaliza para o nome de usuário antes de gravar. Com 60, o link era
+  // truncado no meio e virava lixo silencioso no banco.
+  handle: z.string().min(1).max(200),
   label: z.string().max(120).nullable().optional(),
   kind: z.enum(["opponent", "ally", "press", "other"]),
   postsPerScan: z.number().int().min(3).max(50).default(10),
@@ -17,7 +21,15 @@ export const upsertInstagramTarget = createServerFn({ method: "POST" })
   .inputValidator((d: z.infer<typeof upsertSchema>) => upsertSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const handle = data.handle.replace(/^@/, "").trim().toLowerCase();
+    // Aceita link colado do app (com utm_source), "@fulano" ou o nome puro — mas grava
+    // sempre o nome de usuário. Cadastro inválido falha AQUI, com mensagem para a pessoa,
+    // em vez de derrubar a varredura de todos os perfis horas depois.
+    const handle = normalizeInstagramHandle(data.handle);
+    if (!handle) {
+      throw new Error(
+        `Perfil do Instagram inválido: "${data.handle}". Use o nome de usuário (ex.: fulano) ou o link do perfil.`,
+      );
+    }
     const row = {
       org_id: data.orgId,
       handle,
